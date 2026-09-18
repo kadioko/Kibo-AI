@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ApiPendingInvite, type ApiTeam } from "@/lib/api";
+import { api, formatUsd, type ApiPendingInvite, type ApiTeam, type CreditSummary } from "@/lib/api";
 
 function shortId(id: string): string {
   return `${id.slice(0, 6)}…`;
@@ -10,6 +10,8 @@ function shortId(id: string): string {
 export default function TeamsPage() {
   const [teams, setTeams] = useState<ApiTeam[]>([]);
   const [pending, setPending] = useState<ApiPendingInvite[]>([]);
+  const [wallets, setWallets] = useState<Record<string, CreditSummary>>({});
+  const [fundAmount, setFundAmount] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
   const [inviteEmail, setInviteEmail] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +35,12 @@ export default function TeamsPage() {
         setTeams(res.teams);
         setPending(res.pendingInvites);
         setMyId(res.me);
+        for (const t of res.teams) {
+          api
+            .teamWallet(t.id)
+            .then((w) => setWallets((prev) => ({ ...prev, [t.id]: w })))
+            .catch(() => {});
+        }
       })
       .catch(() => {});
   }, []);
@@ -100,6 +108,23 @@ export default function TeamsPage() {
       setTeams((prev) => prev.filter((t) => t.id !== teamId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
+
+  async function fund(teamId: string) {
+    const amount = Number(fundAmount[teamId] ?? "");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter an amount above $0.");
+      return;
+    }
+    setError(null);
+    try {
+      await api.fundTeam(teamId, amount);
+      const wallet = await api.teamWallet(teamId);
+      setWallets((prev) => ({ ...prev, [teamId]: wallet }));
+      setFundAmount((prev) => ({ ...prev, [teamId]: "" }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Funding failed");
     }
   }
 
@@ -183,7 +208,10 @@ export default function TeamsPage() {
                 <div>
                   <p className="font-semibold">{team.name}</p>
                   <p className="text-xs text-faint">
-                    {team.members.length} member{team.members.length === 1 ? "" : "s"}
+                    {team.members.length} member{team.members.length === 1 ? "" : "s"} · wallet{" "}
+                    <span className="font-semibold tabular-nums text-ink">
+                      {wallets[team.id] ? formatUsd(wallets[team.id].balance) : "…"}
+                    </span>
                   </p>
                 </div>
                 <button
@@ -194,6 +222,33 @@ export default function TeamsPage() {
                   Delete team
                 </button>
               </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void fund(team.id);
+                }}
+                className="mt-3 flex gap-2"
+              >
+                <input
+                  value={fundAmount[team.id] ?? ""}
+                  onChange={(e) => setFundAmount((prev) => ({ ...prev, [team.id]: e.target.value }))}
+                  inputMode="decimal"
+                  placeholder="Fund wallet ($)"
+                  aria-label={`Fund ${team.name} wallet`}
+                  className="min-w-0 flex-1 rounded-xl border border-edge bg-panel-2 px-3 py-2 text-sm outline-none placeholder:text-faint focus:border-accent"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-xl border border-edge px-3 py-2 text-sm transition hover:border-accent hover:text-accent"
+                >
+                  Add funds
+                </button>
+              </form>
+              <p className="mt-1.5 text-[11px] text-faint">
+                Moves your personal credits into the shared wallet. Team generations spend from
+                here; the balance is the cap.
+              </p>
 
               <div className="mt-3 space-y-1.5">
                 {team.members.map((m) => (

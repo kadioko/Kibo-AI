@@ -29,6 +29,8 @@ credentials. Do not commit `.env.local` or any API credentials.
      limits, public template seeds)
    - `supabase/migrations/0003_phase3.sql` (teams, invites, project sharing,
      credits ledger)
+   - `supabase/migrations/0004_team_wallets.sql` (generation team snapshot,
+     team wallet ledger)
    - `supabase/migrations/0003_integrity_and_template_rls.sql` (template
      access control and generation record integrity)
 3. **Storage** → create two buckets:
@@ -113,11 +115,21 @@ supabase/migrations/  Postgres schema + RLS
   (enforced pre-submit, managed in Settings, budget bar in Usage), spend by
   project.
 - **Phase 3 ✓** — prompt assistant (rule-based built in, LLM via
-  `ASSISTANT_*` env), team accounts (teams, email invites, shared projects),
-  credits/billing (prepaid ledger, $5 welcome grant, 402 enforcement, Stripe
-  Checkout + webhook stub), second provider (free `mock` provider behind
-  `MOCK_PROVIDER_ENABLED`, proving the abstraction), Higgsfield webhook
-  receiver, 26-test vitest suite (`npm test`).
+  `ASSISTANT_*` env), team accounts (teams, email invites, shared projects,
+  pooled team wallets with personal→team funding), credits/billing (prepaid
+  ledger, $5 welcome grant, 402 enforcement, Stripe Checkout + webhook stub),
+  second provider (free `mock` provider behind `MOCK_PROVIDER_ENABLED`,
+  proving the abstraction), Higgsfield webhook receiver, Upstash Redis rate
+  limiting (in-memory fallback), `/api/health` diagnostics panel in Settings,
+  30-test vitest suite (`npm test`).
+
+## Verify without spending (mock end-to-end)
+
+1. Set `MOCK_PROVIDER_ENABLED=true` in `.env.local` (no Higgsfield key needed).
+2. `npm run dev` → sign up → Create → pick **Mock Image** → Generate.
+3. Watch it complete in ~8s, land in Library, and log $0.00 usage.
+   This exercises submit → poll → storage copy → ledger → signed URLs.
+4. Open Settings → Diagnostics for the live setup checklist.
 
 ## Troubleshooting
 

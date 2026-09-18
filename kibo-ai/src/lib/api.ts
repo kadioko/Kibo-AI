@@ -1,6 +1,7 @@
 export interface ApiGeneration {
   id: string;
   project_id: string | null;
+  team_id: string | null;
   brand_id: string | null;
   template_id: string | null;
   provider: string;
@@ -227,6 +228,13 @@ export const api = {
     request<{ ok: true }>(`/api/teams/${teamId}/membership`, { method: "DELETE" }),
   removeMember: (teamId: string, userId: string) =>
     request<{ ok: true }>(`/api/teams/${teamId}/members/${userId}`, { method: "DELETE" }),
+  teamWallet: (teamId: string) =>
+    request<CreditSummary>(`/api/teams/${teamId}/wallet`),
+  fundTeam: (teamId: string, amount: number) =>
+    request<{ balance: number; lifetimeGranted: number; lifetimeSpent: number }>(
+      `/api/teams/${teamId}/fund`,
+      { method: "POST", body: JSON.stringify({ amount }) },
+    ),
   billing: () => request<CreditSummary>("/api/billing"),
   topup: (amountUsd: number) =>
     request<{ url: string }>("/api/billing/checkout", {

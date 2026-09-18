@@ -28,4 +28,14 @@ export interface Billing {
   /** Append a grant (welcome, top-up, admin). */
   grant(userId: string, amountUsd: number, reason: string): Promise<void>;
   recent(userId: string, limit?: number): Promise<LedgerEntry[]>;
+
+  /** Team wallet balance (no welcome grant — teams start at zero). */
+  teamBalance(teamId: string): Promise<CreditSummary>;
+  /** Throw 402 when the team wallet cannot cover the estimate. */
+  checkTeamSufficient(teamId: string, estimateUsd: number): Promise<void>;
+  /** Record completed-generation spend against the team wallet. */
+  spendTeam(teamId: string, generationId: string | null, amountUsd: number): Promise<void>;
+  /** Move personal credits into a team wallet (compensating on failure). */
+  fundTeam(userId: string, teamId: string, amountUsd: number): Promise<void>;
+  recentTeam(teamId: string, limit?: number): Promise<LedgerEntry[]>;
 }

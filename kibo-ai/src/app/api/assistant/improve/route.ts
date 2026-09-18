@@ -14,7 +14,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    if (!takeToken(`assist:${user.id}`, { limit: 30, windowMs: 60 * 60_000 })) {
+    if (!(await takeToken(`assist:${user.id}`, { limit: 30, windowMs: 60 * 60_000 }))) {
       return NextResponse.json({ error: "Assistant rate limit reached — try again later." }, { status: 429 });
     }
     const parsed = schema.safeParse(await request.json());

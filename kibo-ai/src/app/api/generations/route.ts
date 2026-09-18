@@ -75,7 +75,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    if (!checkGenerationLimit(user.id)) {
+    if (!(await checkGenerationLimit(user.id))) {
       return NextResponse.json(
         { error: "Rate limit exceeded — please wait a few minutes before generating again." },
         { status: 429 },

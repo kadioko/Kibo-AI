@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/lib/auth-actions";
+import { DiagnosticsPanel } from "@/components/diagnostics-panel";
 import { PasswordForm } from "@/components/password-form";
 import { SpendingLimitForm } from "@/components/spending-limit-form";
 
@@ -44,6 +45,14 @@ export default async function SettingsPage() {
           Arriving from a reset email? You are signed in — set the new password here.
         </p>
         <PasswordForm />
+      </section>
+
+      <section className="rounded-2xl border border-edge bg-panel p-5">
+        <h2 className="font-semibold">Diagnostics</h2>
+        <p className="mb-3 mt-1 text-sm text-mute">
+          Live checklist of migrations, buckets, credentials and wiring.
+        </p>
+        <DiagnosticsPanel />
       </section>
 
       <section className="rounded-2xl border border-edge bg-panel p-5">

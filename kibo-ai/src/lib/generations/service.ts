@@ -20,6 +20,7 @@ export interface GenerationRow {
   id: string;
   user_id: string;
   project_id: string | null;
+  team_id: string | null;
   brand_id: string | null;
   template_id: string | null;
   provider: string;
@@ -175,9 +176,11 @@ export async function createGenerationRecord(
   const provider = getProvider(body.provider);
 
   const db = await createServiceClient();
+  let fundingTeamId: string | null = null;
   if (body.projectId) {
     const project = await loadProjectForUse(db, userId, body.projectId);
     if (!project) throw new Error("Project not found");
+    fundingTeamId = project.team_id;
   }
   if (body.brandId) {
     const { data: brand } = await db
@@ -199,8 +202,13 @@ export async function createGenerationRecord(
   }
 
   await enforceSpendingLimit(db, userId, estimate.amountUsd);
-  // Prepaid credits gate the submit; the ledger is debited at completion.
-  await getBilling().checkSufficient(userId, estimate.amountUsd);
+  // Funding wallet: team project → team wallet, else personal credits.
+  if (fundingTeamId) {
+    await getBilling().checkTeamSufficient(fundingTeamId, estimate.amountUsd);
+  } else {
+    // Prepaid credits gate the submit; the ledger is debited at completion.
+    await getBilling().checkSufficient(userId, estimate.amountUsd);
+  }
 
   const queued = await provider.createGeneration({
     model: model.id,
@@ -216,6 +224,7 @@ export async function createGenerationRecord(
     .insert({
       user_id: userId,
       project_id: body.projectId ?? null,
+      team_id: fundingTeamId,
       brand_id: body.brandId ?? null,
       template_id: body.templateId ?? null,
       provider: body.provider,
@@ -382,9 +391,13 @@ export async function refreshGenerationRecord(
       cost_usd: row.estimated_cost ?? 0,
     });
     if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
-    // Debit prepaid credits. Failed generations never reach here, so like
-    // the provider, Kibo AI only bills completed work.
-    await getBilling().spend(row.user_id, row.id, row.estimated_cost ?? 0);
+    // Debit the snapshotted funding wallet. Failed generations never reach
+    // here, so like the provider, Kibo AI only bills completed work.
+    if (row.team_id) {
+      await getBilling().spendTeam(row.team_id, row.id, row.estimated_cost ?? 0);
+    } else {
+      await getBilling().spend(row.user_id, row.id, row.estimated_cost ?? 0);
+    }
   }
 
   const { data: fresh } = await db

@@ -125,4 +125,16 @@ describe("estimateModelCost", () => {
     });
     expect(withSound.amountUsd).toBeGreaterThan(silent.amountUsd);
   });
+
+  it("lists free mock models for testing", () => {
+    const mockImage = getModel("mock-image");
+    expect(mockImage.provider).toBe("mock");
+    const estimate = estimateModelCost({
+      model: "mock-video",
+      generationType: "video",
+      prompt: "x",
+      settings: { duration: "5" },
+    });
+    expect(estimate.amountUsd).toBe(0);
+  });
 });
