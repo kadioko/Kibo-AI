@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --color-void: #0a0a0f;
+  --color-panel: #121218;
+  --color-panel-2: #1a1a22;
+  --color-edge: #26262f;
+  --color-ink: #f2f2f5;
+  --color-mute: #9a9aa6;
+  --color-faint: #62626e;
+  --color-accent: #d1fe17;
+  --color-accent-ink: #101300;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.kibo-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.kibo-scroll::-webkit-scrollbar-thumb {
+  background: #2c2c36;
+  border-radius: 8px;
+  border: 2px solid var(--color-void);
+}
+.kibo-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes kibo-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.kibo-live {
+  animation: kibo-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes kibo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.kibo-rise {
+  animation: kibo-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
