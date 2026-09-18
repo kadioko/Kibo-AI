@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, formatUsd } from "@/lib/api";
+import { api, formatUsd, type CreditSummary } from "@/lib/api";
 
 interface Usage {
   totalSpend: number;
@@ -17,6 +17,8 @@ interface Usage {
 export default function UsagePage() {
   const [days, setDays] = useState(30);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [credits, setCredits] = useState<CreditSummary | null>(null);
+  const [topupAmount, setTopupAmount] = useState("20");
   const [error, setError] = useState<string | null>(null);
 
   // Stale-while-revalidate: the previous range stays visible while the new
@@ -31,10 +33,30 @@ export default function UsagePage() {
       .catch((e) => {
         if (live) setError(e instanceof Error ? e.message : "Failed to load");
       });
+    api
+      .billing()
+      .then((r) => {
+        if (live) setCredits(r);
+      })
+      .catch(() => {});
     return () => {
       live = false;
     };
   }, [days]);
+
+  async function topup() {
+    const amount = Number(topupAmount);
+    if (!Number.isFinite(amount) || amount < 5) {
+      setError("Top-up minimum is $5.");
+      return;
+    }
+    try {
+      const { url } = await api.topup(amount);
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Top-up failed");
+    }
+  }
 
   const maxDay = Math.max(0.01, ...(usage?.byDay.map((d) => d.spend) ?? [0]));
 
@@ -145,6 +167,67 @@ export default function UsagePage() {
                 style={{ height: `${Math.max(4, (d.spend / maxDay) * 100)}%` }}
               />
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-edge bg-panel p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Credits</h2>
+          <div className="flex items-center gap-2">
+            <input
+              value={topupAmount}
+              onChange={(e) => setTopupAmount(e.target.value)}
+              inputMode="decimal"
+              aria-label="Top-up amount in USD"
+              className="w-20 rounded-xl border border-edge bg-panel-2 px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={topup}
+              className="rounded-xl bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink transition hover:brightness-110"
+            >
+              Top up $
+            </button>
+          </div>
+        </div>
+        <p className="text-2xl font-bold tabular-nums">
+          {credits ? formatUsd(credits.balance) : "…"}
+        </p>
+        <p className="mt-1 text-xs text-mute">
+          {credits
+            ? `Granted ${formatUsd(credits.lifetimeGranted)} · spent ${formatUsd(credits.lifetimeSpent)}. $1 = 1 credit. New accounts start with welcome credits.`
+            : "Prepaid balance for generations."}
+        </p>
+        {credits && credits.ledger.length > 0 && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-faint">
+                  <th className="pb-2 pr-4 font-medium">Event</th>
+                  <th className="pb-2 pr-4 font-medium">Date</th>
+                  <th className="pb-2 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {credits.ledger.map((entry) => (
+                  <tr key={entry.id} className="border-t border-edge">
+                    <td className="py-2 pr-4">{entry.reason}</td>
+                    <td className="py-2 pr-4 text-faint">
+                      {new Date(entry.created_at).toLocaleDateString()}
+                    </td>
+                    <td
+                      className={`py-2 text-right tabular-nums ${
+                        entry.amount >= 0 ? "text-emerald-300" : ""
+                      }`}
+                    >
+                      {entry.amount >= 0 ? "+" : ""}
+                      {formatUsd(entry.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

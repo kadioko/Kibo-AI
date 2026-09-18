@@ -2,18 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type ApiProject } from "@/lib/api";
+import { api, type ApiProject, type ApiTeam } from "@/lib/api";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [teams, setTeams] = useState<ApiTeam[]>([]);
   const [name, setName] = useState("");
+  const [teamId, setTeamId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editTeam, setEditTeam] = useState("");
 
   useEffect(() => {
     api.projects().then((r) => setProjects(r.projects)).catch(() => {});
+    api.teams().then((r) => setTeams(r.teams)).catch(() => {});
   }, []);
 
   async function create() {
@@ -21,9 +25,10 @@ export default function ProjectsPage() {
     setCreating(true);
     setError(null);
     try {
-      const { project } = await api.createProject(name.trim());
+      const { project } = await api.createProject(name.trim(), undefined, teamId || null);
       setProjects((p) => [project, ...p]);
       setName("");
+      setTeamId("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed");
     } finally {
@@ -37,11 +42,14 @@ export default function ProjectsPage() {
       return;
     }
     try {
-      const { project } = await api.renameProject(id, editName.trim());
+      const { project } = await api.patchProject(id, {
+        name: editName.trim(),
+        teamId: editTeam || null,
+      });
       setProjects((prev) => prev.map((p) => (p.id === id ? project : p)));
       setEditingId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Rename failed");
+      setError(e instanceof Error ? e.message : "Save failed");
     }
   }
 
@@ -81,6 +89,21 @@ export default function ProjectsPage() {
           placeholder="New project — e.g. DukaPilot Campaign"
           className="min-w-0 flex-1 rounded-xl border border-edge bg-panel px-3 py-2.5 text-sm outline-none placeholder:text-faint focus:border-accent"
         />
+        {teams.length > 0 && (
+          <select
+            value={teamId}
+            onChange={(e) => setTeamId(e.target.value)}
+            aria-label="Team"
+            className="shrink-0 rounded-xl border border-edge bg-panel px-3 py-2.5 text-sm outline-none focus:border-accent"
+          >
+            <option value="">Personal</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="submit"
           disabled={creating || !name.trim()}
@@ -97,23 +120,56 @@ export default function ProjectsPage() {
             className="rounded-2xl border border-edge bg-panel p-4 transition hover:border-faint"
           >
             {editingId === p.id ? (
-              <input
-                autoFocus
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={() => void saveRename(p.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void saveRename(p.id);
-                  if (e.key === "Escape") setEditingId(null);
-                }}
-                className="w-full rounded-lg border border-accent bg-panel-2 px-2 py-1 text-sm font-semibold outline-none"
-              />
+              <div className="space-y-2">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveRename(p.id);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  className="w-full rounded-lg border border-accent bg-panel-2 px-2 py-1 text-sm font-semibold outline-none"
+                />
+                {teams.length > 0 && (
+                  <select
+                    value={editTeam}
+                    onChange={(e) => setEditTeam(e.target.value)}
+                    aria-label="Team"
+                    className="w-full rounded-lg border border-edge bg-panel-2 px-2 py-1 text-sm outline-none"
+                  >
+                    <option value="">Personal</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void saveRename(p.id)}
+                    className="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="rounded-lg px-2.5 py-1 text-xs text-mute hover:text-ink"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             ) : (
               <Link href={`/library?project=${p.id}`} className="font-semibold hover:text-accent">
                 {p.name}
               </Link>
             )}
             <p className="mt-1 text-xs text-faint">
+              {p.team_id ? `Team: ${teams.find((t) => t.id === p.team_id)?.name ?? "shared"}` : "Personal"} ·{" "}
               Created {new Date(p.created_at).toLocaleDateString()}
             </p>
             <div className="mt-2 flex gap-1">
@@ -121,6 +177,7 @@ export default function ProjectsPage() {
                 type="button"
                 onClick={() => {
                   setEditName(p.name);
+                  setEditTeam(p.team_id ?? "");
                   setEditingId(p.id);
                 }}
                 className="rounded-lg px-2 py-1 text-xs text-mute transition hover:bg-panel-2 hover:text-ink"

@@ -3,7 +3,8 @@
  * All functions scope by userId explicitly (service client bypasses RLS).
  */
 import { createServiceClient } from "../supabase/server";
-import { getProvider } from "../providers";
+import { getBilling } from "../billing/ledger";
+import { getProvider, isProviderId } from "../providers";
 import type { GenerationStatusValue } from "../providers/types";
 import { estimateModelCost, getModel, parseSettings } from "../models/registry";
 import type { CreateGenerationBody } from "./validation";
@@ -61,12 +62,11 @@ function httpError(status: number, message: string): Error {
   return Object.assign(new Error(message), { status });
 }
 
-async function updateRow(db: Db, id: string, userId: string, patch: Partial<GenerationRow>) {
+async function updateRow(db: Db, id: string, patch: Partial<GenerationRow>) {
   const { data, error } = await db
     .from("generations")
     .update(patch)
     .eq("id", id)
-    .eq("user_id", userId)
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`DB update failed: ${error.message}`);
@@ -76,6 +76,81 @@ async function updateRow(db: Db, id: string, userId: string, patch: Partial<Gene
   if (!data) throw httpError(404, "Generation not found");
 }
 
+export type GenerationAccess = "owner" | "member";
+
+export interface AccessibleGeneration {
+  row: GenerationRow;
+  access: GenerationAccess;
+  teamId: string | null;
+  teamRole: string | null;
+}
+
+/**
+ * Load a generation the user may see: their own, or one filed under a
+ * project whose team they belong to. Null when there is no access.
+ */
+export async function loadGenerationForUser(
+  db: Db,
+  userId: string,
+  id: string,
+): Promise<AccessibleGeneration | null> {
+  const { data } = await db.from("generations").select("*").eq("id", id).single();
+  if (!data) return null;
+  const row = data as GenerationRow;
+  if (row.user_id === userId) return { row, access: "owner", teamId: null, teamRole: null };
+  if (!row.project_id) return null;
+  const { data: project } = await db
+    .from("projects")
+    .select("team_id")
+    .eq("id", row.project_id)
+    .single();
+  const teamId = (project as { team_id: string | null } | null)?.team_id;
+  if (!teamId) return null;
+  const { data: membership } = await db
+    .from("team_members")
+    .select("role")
+    .eq("team_id", teamId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!membership) return null;
+  return {
+    row,
+    access: "member",
+    teamId,
+    teamRole: (membership as { role: string }).role,
+  };
+}
+
+export interface AccessibleProject {
+  id: string;
+  user_id: string;
+  team_id: string | null;
+}
+
+/** Project the user can file generations under: owned or team-shared. */
+export async function loadProjectForUse(
+  db: Db,
+  userId: string,
+  projectId: string,
+): Promise<AccessibleProject | null> {
+  const { data } = await db
+    .from("projects")
+    .select("id,user_id,team_id")
+    .eq("id", projectId)
+    .single();
+  if (!data) return null;
+  const project = data as AccessibleProject;
+  if (project.user_id === userId) return project;
+  if (!project.team_id) return null;
+  const { data: membership } = await db
+    .from("team_members")
+    .select("role")
+    .eq("team_id", project.team_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return membership ? project : null;
+}
+
 export async function createGenerationRecord(
   userId: string,
   body: CreateGenerationBody,
@@ -83,6 +158,9 @@ export async function createGenerationRecord(
   const model = getModel(body.model);
   if (model.capabilities.generationType !== body.generationType) {
     throw new Error(`Model ${model.label} does not support ${body.generationType} generation`);
+  }
+  if (!isProviderId(body.provider) || model.provider !== body.provider) {
+    throw new Error(`Model ${model.label} is not available through ${body.provider}`);
   }
   const settings = parseSettings(model, body.settings ?? {});
   const estimate = estimateModelCost({
@@ -94,16 +172,11 @@ export async function createGenerationRecord(
     settings,
   });
 
-  const provider = getProvider("higgsfield");
+  const provider = getProvider(body.provider);
 
   const db = await createServiceClient();
   if (body.projectId) {
-    const { data: project } = await db
-      .from("projects")
-      .select("id")
-      .eq("id", body.projectId)
-      .eq("user_id", userId)
-      .maybeSingle();
+    const project = await loadProjectForUse(db, userId, body.projectId);
     if (!project) throw new Error("Project not found");
   }
   if (body.brandId) {
@@ -126,6 +199,8 @@ export async function createGenerationRecord(
   }
 
   await enforceSpendingLimit(db, userId, estimate.amountUsd);
+  // Prepaid credits gate the submit; the ledger is debited at completion.
+  await getBilling().checkSufficient(userId, estimate.amountUsd);
 
   const queued = await provider.createGeneration({
     model: model.id,
@@ -143,7 +218,7 @@ export async function createGenerationRecord(
       project_id: body.projectId ?? null,
       brand_id: body.brandId ?? null,
       template_id: body.templateId ?? null,
-      provider: "higgsfield",
+      provider: body.provider,
       model: model.id,
       generation_type: body.generationType,
       prompt: body.prompt,
@@ -217,18 +292,14 @@ export async function refreshGenerationRecord(
   generationId: string,
 ): Promise<GenerationRow> {
   const db = await createServiceClient();
-  const { data, error } = await db
-    .from("generations")
-    .select("*")
-    .eq("id", generationId)
-    .eq("user_id", userId)
-    .single();
-  if (error || !data) throw new Error("Generation not found");
-  const row = data as GenerationRow;
+  const accessible = await loadGenerationForUser(db, userId, generationId);
+  if (!accessible) throw httpError(404, "Generation not found");
+  const row = accessible.row;
 
   if (isTerminal(row.status) || !row.provider_request_id) return row;
 
-  const provider = getProvider("higgsfield");
+  if (!isProviderId(row.provider)) throw new Error(`Unknown provider: ${row.provider}`);
+  const provider = getProvider(row.provider);
   let status;
   try {
     status = await provider.getGenerationStatus(row.provider_request_id);
@@ -240,14 +311,14 @@ export async function refreshGenerationRecord(
 
   if (status.status === "processing" || status.status === "queued") {
     if (row.status !== status.status) {
-      await updateRow(db, row.id, userId, { status: status.status, error: null });
+      await updateRow(db, row.id, { status: status.status, error: null });
       row.status = status.status;
     }
     return row;
   }
 
   if (status.status === "cancelled") {
-    await updateRow(db, row.id, userId, {
+    await updateRow(db, row.id, {
       status: "cancelled",
       error: status.error ?? "Cancelled",
       completed_at: new Date().toISOString(),
@@ -257,7 +328,7 @@ export async function refreshGenerationRecord(
   }
 
   if (status.status === "failed" || status.outputUrls.length === 0) {
-    await updateRow(db, row.id, userId, {
+    await updateRow(db, row.id, {
       status: "failed",
       error: status.error ?? "The provider reported a failure",
       completed_at: new Date().toISOString(),
@@ -275,20 +346,18 @@ export async function refreshGenerationRecord(
     .from("generations")
     .select("status")
     .eq("id", row.id)
-    .eq("user_id", userId)
     .single();
   if (latest && isTerminal((latest as { status: GenerationStatusValue }).status)) {
     const { data: fresh } = await db
       .from("generations")
       .select("*")
       .eq("id", row.id)
-      .eq("user_id", userId)
       .single();
     return (fresh ?? row) as GenerationRow;
   }
   const stored = await copyOutputsToStorage(db, row, status.outputUrls);
   const primary = stored[0];
-  await updateRow(db, row.id, userId, {
+  await updateRow(db, row.id, {
     status: "completed",
     output_url: primary?.storagePath ?? null,
     thumbnail_url:
@@ -297,24 +366,31 @@ export async function refreshGenerationRecord(
     completed_at: new Date().toISOString(),
     error: null,
   });
-  const { error: usageError } = await db.from("usage_logs").upsert(
-    {
-      user_id: userId,
+  const { data: logged } = await db
+    .from("usage_logs")
+    .select("id")
+    .eq("generation_id", row.id)
+    .maybeSingle();
+  if (!logged) {
+    const { error: usageError } = await db.from("usage_logs").insert({
+      // Spend belongs to the generation owner, whoever polls it home.
+      user_id: row.user_id,
       generation_id: row.id,
       provider: row.provider,
       model: row.model,
       project_id: row.project_id,
       cost_usd: row.estimated_cost ?? 0,
-    },
-    { onConflict: "generation_id", ignoreDuplicates: true },
-  );
-  if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
+    });
+    if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
+    // Debit prepaid credits. Failed generations never reach here, so like
+    // the provider, Kibo AI only bills completed work.
+    await getBilling().spend(row.user_id, row.id, row.estimated_cost ?? 0);
+  }
 
   const { data: fresh } = await db
     .from("generations")
     .select("*")
     .eq("id", row.id)
-    .eq("user_id", userId)
     .single();
   return (fresh ?? row) as GenerationRow;
 }
@@ -407,24 +483,18 @@ export interface SerializedAsset {
   mimeType: string | null;
 }
 
-/** All stored output files for a generation (batch of N), newest last. */
+/** All stored output files for a generation (batch of N), oldest first. */
 export async function listAssets(
   userId: string,
   generationId: string,
 ): Promise<SerializedAsset[]> {
   const db = await createServiceClient();
-  const { data: generation } = await db
-    .from("generations")
-    .select("id")
-    .eq("id", generationId)
-    .eq("user_id", userId)
-    .single();
-  if (!generation) throw new Error("Generation not found");
+  const accessible = await loadGenerationForUser(db, userId, generationId);
+  if (!accessible) throw httpError(404, "Generation not found");
   const { data, error } = await db
     .from("generation_assets")
     .select("id,storage_path,mime_type,created_at")
     .eq("generation_id", generationId)
-    .eq("user_id", userId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Assets query failed: ${error.message}`);
   const rows = (data ?? []) as Array<{

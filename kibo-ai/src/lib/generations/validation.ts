@@ -9,7 +9,7 @@ export const inputAssetSchema = z.object({
 });
 
 export const createGenerationSchema = z.object({
-  provider: z.literal("higgsfield").default("higgsfield"),
+  provider: z.enum(["higgsfield", "mock"]).default("higgsfield"),
   model: z.string().min(1).max(128),
   generationType: z.enum(["image", "video"]),
   prompt: z.string().trim().min(1).max(5000),

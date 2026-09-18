@@ -22,6 +22,7 @@ export async function GET() {
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional(),
+  teamId: z.string().uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -31,12 +32,14 @@ export async function POST(request: Request) {
     const parsed = createSchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     const supabase = await createClient();
+    // RLS (projects_insert) rejects team_ids the user is not a member of.
     const { data, error } = await supabase
       .from("projects")
       .insert({
         user_id: user.id,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
+        team_id: parsed.data.teamId ?? null,
       })
       .select()
       .single();

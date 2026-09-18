@@ -4,12 +4,12 @@ import {
   OUTPUTS_BUCKET,
   favoriteIds,
   isTerminal,
+  loadGenerationForUser,
   refreshGenerationRecord,
   serializeGeneration,
-  type GenerationRow,
 } from "@/lib/generations/service";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getProvider } from "@/lib/providers";
+import { getProvider, isProviderId } from "@/lib/providers";
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -34,19 +34,18 @@ export async function DELETE(_request: Request, { params }: Params) {
     const user = await requireUser();
     const { id } = await params;
     const db = await createServiceClient();
-    const { data } = await db
-      .from("generations")
-      .select("id,provider_request_id,status,output_url")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .single();
-    if (!data) return NextResponse.json({ error: "Generation not found" }, { status: 404 });
-    const row = data as Pick<GenerationRow, "provider_request_id" | "status">;
+    const accessible = await loadGenerationForUser(db, user.id, id);
+    if (!accessible) return NextResponse.json({ error: "Generation not found" }, { status: 404 });
+    // Owners delete freely; team members need an owner/admin team role.
+    const { row, access, teamRole } = accessible;
+    if (access !== "owner" && teamRole !== "owner" && teamRole !== "admin") {
+      return NextResponse.json({ error: "Only the owner or a team admin can delete this." }, { status: 403 });
+    }
 
     // Best-effort provider cancel for in-flight generations.
-    if (!isTerminal(row.status) && row.provider_request_id) {
+    if (!isTerminal(row.status) && row.provider_request_id && isProviderId(row.provider)) {
       try {
-        await getProvider("higgsfield").cancelGeneration(row.provider_request_id);
+        await getProvider(row.provider).cancelGeneration(row.provider_request_id);
       } catch {
         // Non-fatal — the DB row is still deleted below.
       }

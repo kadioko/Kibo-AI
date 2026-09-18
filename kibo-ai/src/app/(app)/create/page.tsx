@@ -54,6 +54,8 @@ function CreateStudio() {
   const [live, setLive] = useState<ApiGeneration | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [improving, setImproving] = useState(false);
+  const [improveNote, setImproveNote] = useState<string | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // React StrictMode (dev) mounts, unmounts and remounts: without this guard
   // the ?regenerate= auto-submit would bill twice.
@@ -305,6 +307,27 @@ function CreateStudio() {
     }
   }
 
+  async function improvePrompt() {
+    if (!prompt.trim() || improving) return;
+    setImproving(true);
+    setImproveNote(null);
+    setError(null);
+    try {
+      const res = await api.improvePrompt({
+        prompt: prompt.trim(),
+        generationType: type,
+        brandId: brandId || undefined,
+      });
+      setPrompt(res.improved);
+      setImproveNote(
+        `${res.backend === "llm" ? "Improved with AI" : "Structured"} — ${res.notes.join(" ")}`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Improve failed");
+    } finally {
+      setImproving(false);
+    }
+  }
   async function generate() {
     if (!model || !prompt.trim() || submitting) return;
     await submitAndWatch({
@@ -443,17 +466,29 @@ function CreateStudio() {
           aria-label="Prompt"
           className="w-full resize-y bg-transparent text-[15px] leading-relaxed outline-none placeholder:text-faint"
         />
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="mt-2 text-xs text-mute transition hover:text-ink"
-        >
-          {showAdvanced
-            ? "▾ Hide advanced"
-            : model?.capabilities.negativePrompt
-              ? "▸ Negative prompt, project & brand"
-              : "▸ Project & brand"}
-        </button>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            disabled={!prompt.trim() || improving}
+            onClick={improvePrompt}
+            title="Turn this idea into a structured production prompt"
+            className="rounded-lg border border-edge px-2.5 py-1 text-xs transition hover:border-accent hover:text-accent disabled:opacity-40"
+          >
+            {improving ? "✨ Improving…" : "✨ Improve prompt"}
+          </button>
+          {improveNote && <span className="text-xs text-faint">{improveNote}</span>}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="ml-auto text-xs text-mute transition hover:text-ink"
+          >
+            {showAdvanced
+              ? "▾ Hide advanced"
+              : model?.capabilities.negativePrompt
+                ? "▸ Negative prompt, project & brand"
+                : "▸ Project & brand"}
+          </button>
+        </div>
         {showAdvanced && (
           <div className="mt-3 space-y-3 border-t border-edge pt-3">
             {model?.capabilities.negativePrompt && (

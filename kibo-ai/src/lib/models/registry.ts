@@ -432,6 +432,37 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perSecondUsd: 0.05, audioPerSecondUsd: 0.01 },
     capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
   }),
+  // Mock provider models — free, deterministic, only listed when
+  // MOCK_PROVIDER_ENABLED=true. Used for development and tests.
+  imageModel({
+    id: "mock-image",
+    provider: "mock",
+    label: "Mock Image (free)",
+    blurb: "Placeholder images for testing — no billing",
+    mediaRoles: {},
+    settings: {
+      aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "1:1" },
+    },
+    endpoints: { text: "mock/text-to-image" },
+    pricing: { perImageUsd: 0 },
+  }),
+  videoModel({
+    id: "mock-video",
+    provider: "mock",
+    label: "Mock Video (free)",
+    blurb: "Placeholder video for testing — no billing",
+    mediaRoles: { start: 1 },
+    settings: {
+      aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
+      duration: { type: "enum", values: ["5"], default: "5" },
+    },
+    endpoints: {
+      text: "mock/text-to-video",
+      image: "mock/image-to-video",
+    },
+    pricing: { perSecondUsd: 0 },
+    capabilities: { imageToVideo: true, durations: [5] },
+  }),
 ];
 
 export function getModel(id: string): ModelDefinition {
@@ -471,7 +502,7 @@ export function parseSettings(
         parsed[key] = field.min;
       }
     } else {
-      parsed[key] = value === true;
+      parsed[key] = value === undefined ? field.default : value === true;
     }
   }
   return parsed;
@@ -584,7 +615,7 @@ export function estimateModelCost(input: CreateGenerationInput): CostEstimate {
   if (model.capabilities.generationType === "image") {
     const perImage = (model.pricing as { perImageUsd: number }).perImageUsd;
     const outputs = countOutputs(model, settings);
-    const amount = round2(perImage * outputs);
+    const amount = round4(perImage * outputs);
     return {
       amountUsd: amount,
       currency: "USD",
@@ -602,7 +633,7 @@ export function estimateModelCost(input: CreateGenerationInput): CostEstimate {
   const mult = pricing.resolutionMultiplier?.[resolution] ?? 1;
   const audioOn = audioEnabled(settings);
   const audioRate = audioOn ? (pricing.audioPerSecondUsd ?? 0) : 0;
-  const amount = round2(duration * (pricing.perSecondUsd * mult + audioRate));
+  const amount = round4(duration * (pricing.perSecondUsd * mult + audioRate));
   return {
     amountUsd: amount,
     currency: "USD",
@@ -630,6 +661,6 @@ function toSnake(key: string): string {
   return key.replace(/([A-Z])/g, (c) => `_${c.toLowerCase()}`);
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+function round4(n: number): number {
+  return Math.round(n * 10_000) / 10_000;
 }

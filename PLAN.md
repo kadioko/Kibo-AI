@@ -49,11 +49,24 @@ usage_logs. RLS: user-owned rows only; public read on catalog tables.
   prompt templates (9 public seeds + custom, model/aspect/duration applied on
   Create), monthly spending limits (migration 0002, 402 enforcement
   pre-submit, Settings UI, Usage budget bar), spend by project.
-- [ ] **Phase 3:** prompt assistant service + LLM wiring, credits/billing,
-  second provider via `GenerationProvider`, webhooks.
+- [x] **Phase 3:** prompt assistant (rule-based built in, OpenAI-compatible
+  LLM via env, brand-aware, rate-limited), team accounts (teams, email
+  invites with accept/decline, member roles, shared projects with RLS +
+  service-layer access checks), credits/billing (prepaid ledger, welcome
+  grant, 402 enforcement pre-submit, debit on completion only, Stripe
+  Checkout + webhook stub, balance + ledger UI), second provider (free mock
+  provider proving `GenerationProvider` is plug-and-play), Higgsfield
+  webhook receiver, 26-test vitest suite.
+- [x] **Bug-fix pass:** `/auth/confirm` recovery flow + password form, JSON
+  401s for logged-out API calls, provider cancel on DB-insert failure,
+  finalize idempotency (usage + assets), storage cleanup on delete,
+  StrictMode double-submit guard, 10/15-min polling deadlines,
+  fixed a REAL upsert-without-constraint crash in usage logging, boolean
+  defaults, 4-decimal money precision.
 
 ## 7. To run it
 
-Supabase project → run migrations 0001 + 0002 → create `kibo-inputs`
-(public) + `kibo-outputs` (private) buckets → Higgsfield key → `.env.local`
-→ `npm run dev`. Details in `kibo-ai/README.md`.
+Supabase project → run migrations 0001 + 0002 + 0003 → create
+`kibo-inputs` (public) + `kibo-outputs` (private) buckets → allow-list
+`/auth/confirm` in Supabase URL config → Higgsfield key → `.env.local`
+→ `npm run dev` (+ `npm test`). Details in `kibo-ai/README.md`.

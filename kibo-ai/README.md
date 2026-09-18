@@ -27,6 +27,8 @@ credentials. Do not commit `.env.local` or any API credentials.
    - `supabase/migrations/0001_kibo_init.sql` (tables, RLS, provider seed)
    - `supabase/migrations/0002_phase2.sql` (brand/template links, spending
      limits, public template seeds)
+   - `supabase/migrations/0003_phase3.sql` (teams, invites, project sharing,
+     credits ledger)
    - `supabase/migrations/0003_integrity_and_template_rls.sql` (template
      access control and generation record integrity)
 3. **Storage** → create two buckets:
@@ -99,6 +101,7 @@ supabase/migrations/  Postgres schema + RLS
 | `npm run build` | Production build (typechecks) |
 | `npm start` | Serve production build |
 | `npm run lint` | ESLint |
+| `npm test` | Vitest suite |
 
 ## Roadmap
 
@@ -109,9 +112,12 @@ supabase/migrations/  Postgres schema + RLS
   templates (9 seeds + custom, wired into Create), monthly spending limits
   (enforced pre-submit, managed in Settings, budget bar in Usage), spend by
   project.
-- **Phase 3** — prompt assistant service + LLM wiring, credits/billing,
-  extra providers (drop a new `GenerationProvider` into `src/lib/providers/`),
-  webhook endpoint (polling works).
+- **Phase 3 ✓** — prompt assistant (rule-based built in, LLM via
+  `ASSISTANT_*` env), team accounts (teams, email invites, shared projects),
+  credits/billing (prepaid ledger, $5 welcome grant, 402 enforcement, Stripe
+  Checkout + webhook stub), second provider (free `mock` provider behind
+  `MOCK_PROVIDER_ENABLED`, proving the abstraction), Higgsfield webhook
+  receiver, 26-test vitest suite (`npm test`).
 
 ## Troubleshooting
 

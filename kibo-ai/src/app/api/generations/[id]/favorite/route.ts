@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser, toHttpError } from "@/lib/auth";
+import { loadGenerationForUser } from "@/lib/generations/service";
 import { createServiceClient } from "@/lib/supabase/server";
 
 interface Params {
@@ -13,13 +14,8 @@ export async function POST(_request: Request, { params }: Params) {
     const { id } = await params;
     const db = await createServiceClient();
 
-    const { data: generation } = await db
-      .from("generations")
-      .select("id")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .single();
-    if (!generation) return NextResponse.json({ error: "Generation not found" }, { status: 404 });
+    const accessible = await loadGenerationForUser(db, user.id, id);
+    if (!accessible) return NextResponse.json({ error: "Generation not found" }, { status: 404 });
 
     const { data: existing } = await db
       .from("favorites")

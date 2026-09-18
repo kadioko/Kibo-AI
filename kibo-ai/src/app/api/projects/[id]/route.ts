@@ -10,7 +10,10 @@ interface Params {
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(500).nullable().optional(),
+  teamId: z.string().uuid().nullable().optional(),
 });
+
+const COLUMN_MAP: Record<string, string> = { teamId: "team_id" };
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
@@ -21,10 +24,14 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!parsed.success || Object.keys(parsed.data).length === 0) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(parsed.data)) {
+      patch[COLUMN_MAP[key] ?? key] = value === "" ? null : value;
+    }
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("projects")
-      .update(parsed.data)
+      .update(patch)
       .eq("id", id)
       .select()
       .single();

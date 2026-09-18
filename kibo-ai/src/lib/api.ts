@@ -55,7 +55,47 @@ export interface ApiProject {
   id: string;
   name: string;
   description: string | null;
+  team_id: string | null;
   created_at: string;
+}
+
+export interface ApiTeamMember {
+  team_id: string;
+  user_id: string;
+  role: string;
+}
+
+export interface ApiTeamInvite {
+  id: string;
+  team_id: string;
+  email: string;
+  created_at: string;
+}
+
+export interface ApiTeam {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+  members: ApiTeamMember[];
+  invites: ApiTeamInvite[];
+}
+
+export interface ApiPendingInvite extends ApiTeamInvite {
+  teams: { id: string; name: string } | null;
+}
+
+export interface CreditSummary {
+  balance: number;
+  lifetimeGranted: number;
+  lifetimeSpent: number;
+  ledger: Array<{
+    id: string;
+    amount: number;
+    reason: string;
+    generation_id: string | null;
+    created_at: string;
+  }>;
 }
 
 export interface ApiBrand {
@@ -115,6 +155,11 @@ export const api = {
       "/api/generations/estimate",
       { method: "POST", body: JSON.stringify(body) },
     ),
+  improvePrompt: (body: { prompt: string; generationType: "image" | "video"; brandId?: string }) =>
+    request<{ improved: string; backend: "llm" | "rule"; notes: string[] }>(
+      "/api/assistant/improve",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   createGeneration: (body: unknown) =>
     request<{ generation: ApiGeneration }>("/api/generations", {
       method: "POST",
@@ -142,10 +187,15 @@ export const api = {
       { method: "POST", body: JSON.stringify({ contentType, fileName }) },
     ),
   projects: () => request<{ projects: ApiProject[] }>("/api/projects"),
-  createProject: (name: string, description?: string) =>
+  createProject: (name: string, description?: string, teamId?: string | null) =>
     request<{ project: ApiProject }>("/api/projects", {
       method: "POST",
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, teamId: teamId ?? null }),
+    }),
+  patchProject: (id: string, body: { name?: string; teamId?: string | null }) =>
+    request<{ project: ApiProject }>(`/api/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
     }),
   renameProject: (id: string, name: string) =>
     request<{ project: ApiProject }>(`/api/projects/${id}`, {
@@ -154,6 +204,35 @@ export const api = {
     }),
   deleteProject: (id: string) =>
     request<{ ok: true }>(`/api/projects/${id}`, { method: "DELETE" }),
+  teams: () =>
+    request<{ me: string; teams: ApiTeam[]; pendingInvites: ApiPendingInvite[] }>("/api/teams"),
+  createTeam: (name: string) =>
+    request<{ team: ApiTeam }>("/api/teams", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteTeam: (id: string) => request<{ ok: true }>(`/api/teams/${id}`, { method: "DELETE" }),
+  inviteMember: (teamId: string, email: string) =>
+    request<{ invite: ApiTeamInvite }>(`/api/teams/${teamId}/invites`, {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  revokeInvite: (teamId: string, inviteId: string) =>
+    request<{ ok: true }>(`/api/teams/${teamId}/invites?inviteId=${inviteId}`, {
+      method: "DELETE",
+    }),
+  acceptInvite: (teamId: string) =>
+    request<{ ok: true }>(`/api/teams/${teamId}/membership`, { method: "POST" }),
+  declineInvite: (teamId: string) =>
+    request<{ ok: true }>(`/api/teams/${teamId}/membership`, { method: "DELETE" }),
+  removeMember: (teamId: string, userId: string) =>
+    request<{ ok: true }>(`/api/teams/${teamId}/members/${userId}`, { method: "DELETE" }),
+  billing: () => request<CreditSummary>("/api/billing"),
+  topup: (amountUsd: number) =>
+    request<{ url: string }>("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ amountUsd }),
+    }),
   stats: () =>
     request<{
       stats: {
@@ -225,7 +304,9 @@ export async function uploadFile(file: File): Promise<string> {
 
 export function formatUsd(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
-  return `$${Number(n).toFixed(2)}`;
+  const v = Number(n);
+  if (v !== 0 && Math.abs(v) < 0.01) return `$${v.toFixed(4)}`;
+  return `$${v.toFixed(2)}`;
 }
 
 export function timeAgo(iso: string): string {
