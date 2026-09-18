@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { api, formatUsd, timeAgo, type ApiGeneration } from "@/lib/api";
 import { useState } from "react";
+import { ViewerModal } from "./viewer-modal";
 
 function statusStyle(status: ApiGeneration["status"]): string {
   switch (status) {
@@ -28,6 +29,7 @@ export function GenerationCard({
   onChanged: (next: ApiGeneration | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const g = generation;
   const inFlight = g.status === "queued" || g.status === "processing";
 
@@ -57,7 +59,14 @@ export function GenerationCard({
 
   return (
     <div className="kibo-rise group overflow-hidden rounded-2xl border border-edge bg-panel">
-      <div className="relative aspect-[4/3] bg-panel-2">
+      <button
+        type="button"
+        onClick={() => g.output_url && setViewerOpen(true)}
+        aria-label={g.output_url ? `Open run — ${g.model}: ${g.prompt}` : undefined}
+        className={`relative block aspect-[4/3] w-full bg-panel-2 text-left ${
+          g.output_url ? "cursor-zoom-in" : "cursor-default"
+        }`}
+      >
         {g.output_url ? (
           g.generation_type === "video" ? (
             <video
@@ -78,13 +87,13 @@ export function GenerationCard({
             <img src={g.output_url} alt={g.prompt} className="h-full w-full object-cover" loading="lazy" />
           )
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
+          <span className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
             {inFlight ? (
               <>
                 <span className="kibo-live text-sm font-medium text-accent">
                   {g.status === "queued" ? "Queued" : "Generating…"}
                 </span>
-                <span className="text-xs text-faint">Stay on this page — it updates live</span>
+                <span className="text-xs text-faint">Updates live — click to open when done</span>
               </>
             ) : g.status === "failed" ? (
               <>
@@ -94,7 +103,7 @@ export function GenerationCard({
             ) : (
               <span className="text-xs text-faint">No output</span>
             )}
-          </div>
+          </span>
         )}
         <span
           className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusStyle(g.status)}`}
@@ -106,7 +115,7 @@ export function GenerationCard({
             ▶
           </span>
         )}
-      </div>
+      </button>
 
       <div className="p-3">
         <p className="line-clamp-2 text-sm leading-snug">{g.prompt}</p>
@@ -136,6 +145,13 @@ export function GenerationCard({
             >
               ↻
             </Link>
+            <Link
+              href={`/create?regenerate=${g.id}`}
+              title="Regenerate now with the same prompt & settings"
+              className="rounded-lg px-2 py-1 transition hover:bg-panel-2 hover:text-accent"
+            >
+              ⚡
+            </Link>
             <button
               type="button"
               disabled={busy}
@@ -160,6 +176,9 @@ export function GenerationCard({
           </div>
         </div>
       </div>
+      {viewerOpen && g.output_url && (
+        <ViewerModal generation={g} onClose={() => setViewerOpen(false)} onChanged={onChanged} />
+      )}
     </div>
   );
 }

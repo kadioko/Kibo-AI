@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, formatUsd, uploadFile, type ApiGeneration, type ApiModel, type ApiProject } from "@/lib/api";
+import { api, applyBrand, formatUsd, uploadFile, type ApiBrand, type ApiGeneration, type ApiModel, type ApiProject } from "@/lib/api";
 
 type Role = "start" | "end" | "reference" | "video" | "audio";
 
@@ -23,6 +23,11 @@ const ACCEPT: Record<Role, string> = {
   audio: "audio/wav,audio/mpeg",
 };
 
+/** Drop a previously injected brand block so reuse edits clean words. */
+function stripBrandBlock(prompt: string): string {
+  return prompt.replace(/^\[Brand:[^\]]*\]\s*\n\n/, "");
+}
+
 function CreateStudio() {
   const searchParams = useSearchParams();
   const [models, setModels] = useState<ApiModel[]>([]);
@@ -35,6 +40,10 @@ function CreateStudio() {
   const [assets, setAssets] = useState<Array<{ url: string; role: Role }>>([]);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [brands, setBrands] = useState<ApiBrand[]>([]);
+  const [brandId, setBrandId] = useState("");
+  const [templateId, setTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
   const [estimate, setEstimate] = useState<{ amountUsd: number; breakdown?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -47,6 +56,12 @@ function CreateStudio() {
   const model = useMemo(() => models.find((m) => m.id === modelId), [models, modelId]);
   const typeModels = useMemo(() => models.filter((m) => m.generationType === type), [models, type]);
   const values = settings[modelId] ?? {};
+  const brand = useMemo(() => brands.find((b) => b.id === brandId), [brands, brandId]);
+  /** Prompt actually sent: user words wrapped with the brand's context. */
+  const composedPrompt = useMemo(
+    () => (brand && prompt.trim() ? applyBrand(prompt.trim(), brand) : prompt),
+    [prompt, brand],
+  );
 
   const stopPolling = useCallback(() => {
     if (pollTimer.current) clearInterval(pollTimer.current);
@@ -55,25 +70,88 @@ function CreateStudio() {
 
   useEffect(() => stopPolling, [stopPolling]);
 
-  // Initial data + reuse / model preselect from URL.
+  // Initial data + reuse / regenerate / template / model preselect.
+  // submitAndWatch is invoked from .then continuations (async context),
+  // never synchronously in the effect body.
   useEffect(() => {
-    Promise.all([api.models(), api.projects()])
-      .then(async ([m, p]) => {
+    Promise.all([api.models(), api.projects(), api.brands()])
+      .then(async ([m, p, b]) => {
         setModels(m.models);
         setProjects(p.projects);
+        setBrands(b.brands);
         const reuseId = searchParams.get("reuse");
+        const regenId = searchParams.get("regenerate");
+        const templateParam = searchParams.get("template");
         const presetModel = searchParams.get("model");
-        if (reuseId) {
+        const sourceId = regenId ?? reuseId;
+        if (sourceId) {
           try {
-            const { generation } = await api.getGeneration(reuseId);
+            const { generation } = await api.getGeneration(sourceId);
             setType(generation.generation_type);
             setModelId(generation.model);
-            setPrompt(generation.prompt);
+            setPrompt(stripBrandBlock(generation.prompt));
             setNegativePrompt(generation.negative_prompt ?? "");
             setSettings((s) => ({ ...s, [generation.model]: generation.settings }));
             setProjectId(generation.project_id ?? "");
+            if (generation.brand_id) setBrandId(generation.brand_id);
+            if (generation.template_id) {
+              setTemplateId(generation.template_id);
+              void api.getTemplate(generation.template_id).then((r) => setTemplateName(r.template.name)).catch(() => {});
+            }
+            if (regenId) {
+              const entry = m.models.find((x) => x.id === generation.model);
+              if (entry) {
+                await submitAndWatch({
+                  model: entry,
+                  generationType: generation.generation_type,
+                  prompt: generation.prompt,
+                  negativePrompt: generation.negative_prompt ?? undefined,
+                  projectId: generation.project_id ?? undefined,
+                  brandId: generation.brand_id ?? undefined,
+                  templateId: generation.template_id ?? undefined,
+                  inputAssets: generation.input_assets.map((a) => ({
+                    url: a.url,
+                    role: a.role as Role,
+                  })),
+                  settings: generation.settings,
+                });
+              }
+            }
           } catch {
             // Fall through to defaults.
+          }
+        } else if (templateParam) {
+          try {
+            const { template } = await api.getTemplate(templateParam);
+            setTemplateId(template.id);
+            setTemplateName(template.name);
+            setPrompt(template.prompt_structure);
+            const recommended = template.recommended_models.find((id) =>
+              m.models.some((x) => x.id === id),
+            );
+            const entry = m.models.find((x) => x.id === recommended) ?? m.models[0];
+            if (entry) {
+              setType(entry.generationType);
+              setModelId(entry.id);
+              setSettings((s) => {
+                const next = { ...(s[entry.id] ?? {}) };
+                if (template.aspect_ratio && entry.settings.aspectRatio?.type === "enum") {
+                  if (entry.settings.aspectRatio.values.includes(template.aspect_ratio)) {
+                    next.aspectRatio = template.aspect_ratio;
+                  }
+                }
+                if (
+                  template.duration_seconds != null &&
+                  entry.settings.duration?.type === "enum" &&
+                  entry.settings.duration.values.includes(String(template.duration_seconds))
+                ) {
+                  next.duration = String(template.duration_seconds);
+                }
+                return { ...s, [entry.id]: next };
+              });
+            }
+          } catch {
+            // Unknown template — fall through to defaults.
           }
         } else if (presetModel && m.models.some((x) => x.id === presetModel)) {
           const found = m.models.find((x) => x.id === presetModel)!;
@@ -100,12 +178,12 @@ function CreateStudio() {
     }
   }
 
-  // Debounced cost estimate. State only changes inside the timeout
-  // callback, never synchronously in the effect body.
+  // Debounced cost estimate (brand context included — it ships in the
+  // final prompt). State only changes inside the timeout callback.
   useEffect(() => {
     if (!model) return;
     const t = setTimeout(async () => {
-      if (!prompt.trim()) {
+      if (!composedPrompt.trim()) {
         setEstimate(null);
         return;
       }
@@ -113,7 +191,7 @@ function CreateStudio() {
         const res = await api.estimate({
           model: model.id,
           generationType: type,
-          prompt: prompt.trim(),
+          prompt: composedPrompt.trim(),
           negativePrompt: negativePrompt.trim() || undefined,
           inputAssets: assets,
           settings: values,
@@ -125,7 +203,7 @@ function CreateStudio() {
     }, 500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelId, type, prompt, negativePrompt, assets, JSON.stringify(values)]);
+  }, [modelId, type, prompt, brandId, negativePrompt, assets, JSON.stringify(values)]);
 
   function setValue(key: string, value: unknown) {
     setSettings((s) => ({ ...s, [modelId]: { ...(s[modelId] ?? {}), [key]: value } }));
@@ -133,7 +211,10 @@ function CreateStudio() {
 
   function withDefaults(m: ApiModel): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const [k, f] of Object.entries(m.settings)) out[k] = (values[k] ?? f.default);
+    for (const [k, f] of Object.entries(m.settings)) {
+      const v = values[k] ?? (f.type === "integer" ? "" : f.default);
+      if (v !== "") out[k] = v;
+    }
     return out;
   }
 
@@ -156,40 +237,72 @@ function CreateStudio() {
     }
   }
 
-  async function generate() {
-    if (!model || !prompt.trim() || submitting) return;
+  interface SubmitInput {
+    model: ApiModel;
+    generationType: "image" | "video";
+    prompt: string;
+    negativePrompt?: string;
+    projectId?: string;
+    brandId?: string;
+    templateId?: string;
+    inputAssets: Array<{ url: string; role: Role }>;
+    settings: Record<string, unknown>;
+  }
+
+  function watchLive(id: string) {
+    stopPolling();
+    pollTimer.current = setInterval(async () => {
+      try {
+        const { generation: fresh } = await api.getGeneration(id);
+        setLive(fresh);
+        if (fresh.status === "completed" || fresh.status === "failed" || fresh.status === "cancelled") {
+          stopPolling();
+          setSubmitting(false);
+          if (fresh.status === "failed") setError(fresh.error ?? "Generation failed");
+        }
+      } catch {
+        // Keep polling.
+      }
+    }, 4000);
+  }
+
+  async function submitAndWatch(input: SubmitInput) {
     setSubmitting(true);
     setError(null);
     setLive(null);
     try {
       const { generation } = await api.createGeneration({
-        model: model.id,
-        generationType: type,
-        prompt: prompt.trim(),
-        negativePrompt: negativePrompt.trim() || undefined,
-        projectId: projectId || undefined,
-        inputAssets: assets,
-        settings: withDefaults(model),
+        model: input.model.id,
+        generationType: input.generationType,
+        prompt: input.prompt.trim(),
+        negativePrompt: input.negativePrompt?.trim() || undefined,
+        projectId: input.projectId || undefined,
+        brandId: input.brandId || undefined,
+        templateId: input.templateId || undefined,
+        inputAssets: input.inputAssets,
+        settings: input.settings,
       });
       setLive(generation);
-      stopPolling();
-      pollTimer.current = setInterval(async () => {
-        try {
-          const { generation: fresh } = await api.getGeneration(generation.id);
-          setLive(fresh);
-          if (fresh.status === "completed" || fresh.status === "failed" || fresh.status === "cancelled") {
-            stopPolling();
-            setSubmitting(false);
-            if (fresh.status === "failed") setError(fresh.error ?? "Generation failed");
-          }
-        } catch {
-          // Keep polling.
-        }
-      }, 4000);
+      watchLive(generation.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
       setSubmitting(false);
     }
+  }
+
+  async function generate() {
+    if (!model || !prompt.trim() || submitting) return;
+    await submitAndWatch({
+      model,
+      generationType: type,
+      prompt: composedPrompt,
+      negativePrompt: negativePrompt || undefined,
+      projectId: projectId || undefined,
+      brandId: brandId || undefined,
+      templateId: templateId || undefined,
+      inputAssets: assets,
+      settings: withDefaults(model),
+    });
   }
 
   const filtered = query.trim()
@@ -285,6 +398,24 @@ function CreateStudio() {
 
       {/* Prompt */}
       <div className="rounded-2xl border border-edge bg-panel p-4">
+        {templateName && (
+          <div className="mb-3 flex items-center justify-between rounded-xl bg-accent/10 px-3 py-2 text-sm">
+            <span>
+              📋 Template: <strong>{templateName}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setTemplateId("");
+                setTemplateName("");
+              }}
+              className="text-mute transition hover:text-ink"
+              aria-label="Clear template"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -302,19 +433,25 @@ function CreateStudio() {
           onClick={() => setShowAdvanced((v) => !v)}
           className="mt-2 text-xs text-mute transition hover:text-ink"
         >
-          {showAdvanced ? "▾ Hide advanced" : "▸ Negative prompt & project"}
+          {showAdvanced
+            ? "▾ Hide advanced"
+            : model?.capabilities.negativePrompt
+              ? "▸ Negative prompt, project & brand"
+              : "▸ Project & brand"}
         </button>
         {showAdvanced && (
           <div className="mt-3 space-y-3 border-t border-edge pt-3">
-            <label className="block">
-              <span className="mb-1 block text-xs text-mute">Negative prompt</span>
-              <input
-                value={negativePrompt}
-                onChange={(e) => setNegativePrompt(e.target.value)}
-                placeholder="What to avoid…"
-                className="w-full rounded-xl border border-edge bg-panel-2 px-3 py-2 text-sm outline-none placeholder:text-faint focus:border-accent"
-              />
-            </label>
+            {model?.capabilities.negativePrompt && (
+              <label className="block">
+                <span className="mb-1 block text-xs text-mute">Negative prompt</span>
+                <input
+                  value={negativePrompt}
+                  onChange={(e) => setNegativePrompt(e.target.value)}
+                  placeholder="What to avoid…"
+                  className="w-full rounded-xl border border-edge bg-panel-2 px-3 py-2 text-sm outline-none placeholder:text-faint focus:border-accent"
+                />
+              </label>
+            )}
             <label className="block">
               <span className="mb-1 block text-xs text-mute">Project (optional)</span>
               <select
@@ -330,6 +467,29 @@ function CreateStudio() {
                 ))}
               </select>
             </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-mute">Brand (optional)</span>
+              <select
+                value={brandId}
+                onChange={(e) => setBrandId(e.target.value)}
+                className="w-full rounded-xl border border-edge bg-panel-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              >
+                <option value="">No brand</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {brand && prompt.trim() && (
+          <div className="mt-3 rounded-xl bg-panel-2 p-3 text-xs leading-relaxed text-mute">
+            <span className="mb-1 block text-[11px] uppercase tracking-wide text-faint">
+              Brand context sent with your prompt
+            </span>
+            {applyBrand("", brand).replace(/\n\n$/, "")}
           </div>
         )}
       </div>
@@ -393,7 +553,7 @@ function CreateStudio() {
           <p className="mb-3 text-sm font-medium">{model.label} settings</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {Object.entries(model.settings).map(([key, field]) => {
-              const value = values[key] ?? field.default;
+              const value = values[key] ?? (field.type === "integer" ? "" : field.default);
               const label = key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
               if (field.type === "boolean") {
                 return (
@@ -433,6 +593,25 @@ function CreateStudio() {
                         </option>
                       ))}
                     </select>
+                  </label>
+                );
+              }
+              if (field.type === "integer") {
+                return (
+                  <label key={key} className="block rounded-xl border border-edge bg-panel-2 px-3 py-2">
+                    <span className="block text-[11px] uppercase tracking-wide text-faint">{label}</span>
+                    <input
+                      type="number"
+                      min={field.min}
+                      max={field.max}
+                      step={1}
+                      value={value === "" ? "" : Number(value)}
+                      placeholder={field.optional ? "Random" : undefined}
+                      onChange={(e) =>
+                        setValue(key, e.target.value === "" ? "" : Number(e.target.value))
+                      }
+                      className="w-full bg-transparent py-1 text-sm outline-none placeholder:text-faint"
+                    />
                   </label>
                 );
               }

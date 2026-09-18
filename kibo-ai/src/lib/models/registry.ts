@@ -1,9 +1,14 @@
 /**
  * Kibo AI model registry — the single source of truth for models.
  *
- * Endpoints follow the official Higgsfield API catalog. Pricing mirrors the
- * public per-model rates; sync values with console.higgsfield.ai when they
- * change — the UI and cost estimates read them from here.
+ * Pricing reconciled 2026-09-18 against the public Higgsfield API catalog
+ * (higgsfield.ai/higgsfield-api) and docs.higgsfield.ai model pages.
+ * The API bills list rates in USD; account discounts (15–50%) lower the real
+ * charge, so estimates use the STANDARD rate and are conservative by design.
+ *
+ * Verified = endpoint + params + price seen in official docs.
+ * "verify"  = carried over, reconcile in console.higgsfield.ai before relying
+ *             on it for billing-sensitive flows.
  */
 import type { CostEstimate, CreateGenerationInput } from "../providers/types";
 import type { ModelDefinition, ModelEndpoints } from "./types";
@@ -62,6 +67,9 @@ function videoModel(
 }
 
 export const MODELS: readonly ModelDefinition[] = [
+  // Verified: docs.higgsfield.ai/docs/models/soul-2/generate.md —
+  // endpoint, aspect_ratio, resolution, integer batch_size, enhance_prompt,
+  // seed 1–1000000, $0.0032/image list rate. No negative_prompt param.
   imageModel({
     id: "soul-2",
     provider: "higgsfield",
@@ -69,15 +77,24 @@ export const MODELS: readonly ModelDefinition[] = [
     blurb: "Higgsfield's flagship photoreal image model",
     mediaRoles: {},
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "1:1" },
+      aspectRatio: {
+        type: "enum",
+        values: ["9:16", "16:9", "4:3", "3:4", "1:1", "2:3", "3:2"],
+        default: "4:3",
+      },
       resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       batchSize: { type: "enum", values: ["1", "4"], default: "1" },
-      enhancePrompt: { type: "boolean", default: false },
+      enhancePrompt: { type: "boolean", default: true },
+      seed: { type: "integer", min: 1, max: 1000000, optional: true },
     },
     endpoints: { text: "higgsfield-ai/soul/v2/standard" },
-    pricing: { perImageUsd: 0.05 },
-    capabilities: { outputs: [1, 4] },
+    countParam: { bodyKey: "batch_size" },
+    pricing: { perImageUsd: 0.0032 },
+    capabilities: { outputs: [1, 4], seed: true },
   }),
+  // Verified: docs.higgsfield.ai/docs/models/soul-cinema/generate.md —
+  // same schema as Soul 2. Price uses the Soul Standard list rate ($0.0938);
+  // verify in console (verify).
   imageModel({
     id: "soul-cinema",
     provider: "higgsfield",
@@ -85,15 +102,22 @@ export const MODELS: readonly ModelDefinition[] = [
     blurb: "Cinematic stills with filmic light",
     mediaRoles: {},
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "16:9" },
+      aspectRatio: {
+        type: "enum",
+        values: ["9:16", "16:9", "4:3", "3:4", "1:1", "2:3", "3:2"],
+        default: "16:9",
+      },
       resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       batchSize: { type: "enum", values: ["1", "4"], default: "1" },
-      enhancePrompt: { type: "boolean", default: false },
+      enhancePrompt: { type: "boolean", default: true },
+      seed: { type: "integer", min: 1, max: 1000000, optional: true },
     },
     endpoints: { text: "higgsfield-ai/soul/cinema" },
-    pricing: { perImageUsd: 0.05 },
-    capabilities: { outputs: [1, 4] },
+    countParam: { bodyKey: "batch_size" },
+    pricing: { perImageUsd: 0.0938 },
+    capabilities: { outputs: [1, 4], seed: true },
   }),
+  // Endpoints + price unverified (verify).
   imageModel({
     id: "flux",
     provider: "higgsfield",
@@ -111,6 +135,7 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perImageUsd: 0.04 },
     capabilities: { maxReferences: 1, outputs: [1, 2, 3, 4] },
   }),
+  // Endpoints + price unverified (verify).
   imageModel({
     id: "ideogram",
     provider: "higgsfield",
@@ -128,18 +153,32 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perImageUsd: 0.06 },
     capabilities: { maxReferences: 1 },
   }),
+  // Verified: docs.higgsfield.ai/docs/models/recraft-v4-1-pro/generate.md —
+  // endpoint recraft/v4.1/pro/text-to-image, fixed 2k resolution, aspect
+  // allow-list, output_format, colors/background (not yet exposed in UI).
+  // Price unverified (verify). No negative_prompt param.
   imageModel({
     id: "recraft",
     provider: "higgsfield",
     label: "Recraft",
-    blurb: "Design-forward vectors and brand art",
+    blurb: "Design-forward 2K imagery and brand art",
     mediaRoles: {},
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "1:1" },
+      aspectRatio: {
+        type: "enum",
+        values: [
+          "1:1", "2:1", "1:2", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5",
+          "6:10", "14:10", "10:14", "16:9", "9:16",
+        ],
+        default: "1:1",
+      },
+      resolution: { type: "enum", values: ["2k"], default: "2k" },
+      outputFormat: { type: "enum", values: ["png", "jpg", "webp"], default: "jpg" },
     },
-    endpoints: { text: "recraft/text-to-image" },
-    pricing: { perImageUsd: 0.05 },
+    endpoints: { text: "recraft/v4.1/pro/text-to-image" },
+    pricing: { perImageUsd: 0.06 },
   }),
+  // Endpoints + price unverified (verify).
   imageModel({
     id: "qwen-image",
     provider: "higgsfield",
@@ -157,6 +196,9 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perImageUsd: 0.05 },
     capabilities: { maxReferences: 4 },
   }),
+  // Price uses the public Seedance 2.5 standard list rate ($0.1234/s);
+  // token-metered 1080p lands in the same band via the multiplier.
+  // Audio delta unverified (verify).
   videoModel({
     id: "seedance-2.5",
     provider: "higgsfield",
@@ -175,7 +217,7 @@ export const MODELS: readonly ModelDefinition[] = [
       reference: "bytedance/seedance-2.5/reference-to-video",
     },
     pricing: {
-      perSecondUsd: 0.12,
+      perSecondUsd: 0.1234,
       resolutionMultiplier: { "720p": 1, "1080p": 1.8 },
       audioPerSecondUsd: 0.03,
     },
@@ -188,6 +230,7 @@ export const MODELS: readonly ModelDefinition[] = [
       seed: true,
     },
   }),
+  // Endpoints + price unverified (verify); Fast tier should sit under 2.0 std.
   videoModel({
     id: "seedance-2.0-fast",
     provider: "higgsfield",
@@ -206,7 +249,7 @@ export const MODELS: readonly ModelDefinition[] = [
       reference: "bytedance/seedance-2.0/fast/reference-to-video",
     },
     pricing: {
-      perSecondUsd: 0.06,
+      perSecondUsd: 0.0985,
       resolutionMultiplier: { "720p": 1, "1080p": 1.8 },
       audioPerSecondUsd: 0.02,
     },
@@ -218,6 +261,9 @@ export const MODELS: readonly ModelDefinition[] = [
       audioSupport: true,
     },
   }),
+  // Standard list rate $0.084/s (50%-off promo rate is $0.042).
+  // Aspect allow-list is 16:9/9:16/1:1 — sending anything else 400s.
+  // Turbo params page unverified (verify).
   videoModel({
     id: "kling-3-turbo",
     provider: "higgsfield",
@@ -225,7 +271,7 @@ export const MODELS: readonly ModelDefinition[] = [
     blurb: "Fast, high-fidelity short clips",
     mediaRoles: { start: 1 },
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
+      aspectRatio: { type: "enum", values: ["16:9", "9:16", "1:1"], default: "16:9" },
       resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
     },
@@ -233,9 +279,11 @@ export const MODELS: readonly ModelDefinition[] = [
       text: "kling-video/v3.0-turbo/text-to-video",
       image: "kling-video/v3.0-turbo/image-to-video",
     },
-    pricing: { perSecondUsd: 0.1, resolutionMultiplier: { "720p": 1, "1080p": 1.6 } },
+    pricing: { perSecondUsd: 0.084 },
     capabilities: { imageToVideo: true, durations: [5, 10] },
   }),
+  // Standard list rate $0.084/s. `sound` is sent as "on"/"off" (docs).
+  // Std params page unverified beyond the shared Kling contract (verify).
   videoModel({
     id: "kling-3-std",
     provider: "higgsfield",
@@ -243,7 +291,7 @@ export const MODELS: readonly ModelDefinition[] = [
     blurb: "Balanced quality with sound and multi-shot",
     mediaRoles: { start: 1, end: 1 },
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
+      aspectRatio: { type: "enum", values: ["16:9", "9:16", "1:1"], default: "16:9" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
       sound: { type: "boolean", default: false },
       cfgScale: { type: "range", min: 0, max: 1, default: 0.5, step: 0.1 },
@@ -254,11 +302,14 @@ export const MODELS: readonly ModelDefinition[] = [
       image: "kling-video/v3.0/std/image-to-video",
     },
     pricing: {
-      perSecondUsd: 0.14,
-      audioPerSecondUsd: 0.03,
+      perSecondUsd: 0.084,
+      audioPerSecondUsd: 0.02,
     },
     capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
   }),
+  // Verified: docs.higgsfield.ai/docs/models/kling-3/pro-text-to-video.md —
+  // endpoint, duration 3–15s, sound on/off, cfg_scale 0–1, multi_shots,
+  // aspect 16:9/9:16/1:1. Pro price unverified (verify).
   videoModel({
     id: "kling-3-pro",
     provider: "higgsfield",
@@ -266,10 +317,10 @@ export const MODELS: readonly ModelDefinition[] = [
     blurb: "Top-tier realism for hero shots",
     mediaRoles: { start: 1, end: 1 },
     settings: {
-      aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
-      duration: { type: "enum", values: ["5", "10"], default: "5" },
-      sound: { type: "boolean", default: false },
-      cfgScale: { type: "range", min: 0, max: 1, default: 0.5, step: 0.1 },
+      aspectRatio: { type: "enum", values: ["16:9", "9:16", "1:1"], default: "16:9" },
+      duration: { type: "enum", values: ["3", "5", "10", "15"], default: "5" },
+      sound: { type: "boolean", default: true },
+      cfgScale: { type: "range", min: 0, max: 1, default: 0.5, step: 0.05 },
       multiShots: { type: "boolean", default: false },
     },
     endpoints: {
@@ -280,8 +331,9 @@ export const MODELS: readonly ModelDefinition[] = [
       perSecondUsd: 0.28,
       audioPerSecondUsd: 0.05,
     },
-    capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
+    capabilities: { imageToVideo: true, durations: [3, 5, 10, 15], audioSupport: true },
   }),
+  // Wan 3.0 standard list rate $0.05/s. Endpoints unverified (verify).
   videoModel({
     id: "wan-3",
     provider: "higgsfield",
@@ -301,6 +353,7 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perSecondUsd: 0.05 },
     capabilities: { imageToVideo: true, durations: [5, 10] },
   }),
+  // Endpoints + params + price unverified (verify).
   videoModel({
     id: "ltx-2.5-pro",
     provider: "higgsfield",
@@ -323,6 +376,7 @@ export const MODELS: readonly ModelDefinition[] = [
     },
     capabilities: { imageToVideo: true, durations: [2, 3, 4, 5, 6, 7, 8, 9, 10], audioSupport: true },
   }),
+  // Endpoints + params + price unverified (verify).
   videoModel({
     id: "minimax-hailuo",
     provider: "higgsfield",
@@ -340,6 +394,7 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perSecondUsd: 0.07 },
     capabilities: { imageToVideo: true, durations: [6, 10] },
   }),
+  // Endpoints + params + price unverified (verify).
   videoModel({
     id: "pixverse",
     provider: "higgsfield",
@@ -358,6 +413,7 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perSecondUsd: 0.06, audioPerSecondUsd: 0.02 },
     capabilities: { imageToVideo: true, durations: [5, 8], audioSupport: true },
   }),
+  // Endpoints + params + price unverified (verify).
   videoModel({
     id: "grok-imagine-video",
     provider: "higgsfield",
@@ -402,6 +458,18 @@ export function parseSettings(
       const num = typeof value === "number" ? value : Number(value);
       parsed[key] =
         Number.isFinite(num) && num >= field.min && num <= field.max ? num : field.default;
+    } else if (field.type === "integer") {
+      if (value === undefined || value === null || value === "") {
+        if (field.optional) continue; // omit → platform picks (e.g. random seed)
+        parsed[key] = field.min;
+        continue;
+      }
+      const num = typeof value === "number" ? value : Number(value);
+      if (Number.isInteger(num) && num >= field.min && num <= field.max) {
+        parsed[key] = num;
+      } else if (!field.optional) {
+        parsed[key] = field.min;
+      }
     } else {
       parsed[key] = value === true;
     }
@@ -435,13 +503,30 @@ export function buildPlatformBody(input: CreateGenerationInput): {
   const audios = urlsOf(input, "audio");
 
   const body: Record<string, unknown> = { prompt: input.prompt };
-  if (input.negativePrompt) body.negative_prompt = input.negativePrompt;
+  // Only models that document negative_prompt receive it — the platform
+  // rejects unknown fields on strict endpoints. No verified model supports
+  // it yet, so the field stays hidden in the UI until one does.
+  if (input.negativePrompt && model.capabilities.negativePrompt) {
+    body.negative_prompt = input.negativePrompt;
+  }
   if (typeof settings.aspectRatio === "string") body.aspect_ratio = settings.aspectRatio;
   if (typeof settings.resolution === "string") body.resolution = settings.resolution;
   if (settings.duration !== undefined) body.duration = Number(settings.duration);
   for (const [key, value] of Object.entries(settings)) {
+    if (value === undefined) continue;
     if (["aspectRatio", "resolution", "duration", "batchSize", "numImages"].includes(key)) continue;
+    // Kling's contract takes sound as "on"/"off", not boolean.
+    if (key === "sound") {
+      body.sound = value === true ? "on" : "off";
+      continue;
+    }
     body[toSnake(key)] = value;
+  }
+  // Outputs count: sent only when the model declares how (e.g. Soul's
+  // integer batch_size). Otherwise it prices the estimate but is not sent.
+  if (model.countParam) {
+    const n = countOutputs(model, settings);
+    if (Number.isFinite(n)) body[model.countParam.bodyKey] = n;
   }
 
   if (endpoints.firstLast && (start || end)) {

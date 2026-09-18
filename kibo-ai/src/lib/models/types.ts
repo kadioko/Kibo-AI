@@ -10,7 +10,8 @@ export type MediaRole = "start" | "end" | "reference" | "video" | "audio";
 export type SettingField =
   | { type: "enum"; values: readonly string[]; default: string }
   | { type: "range"; min: number; max: number; default: number; step?: number }
-  | { type: "boolean"; default: boolean };
+  | { type: "boolean"; default: boolean }
+  | { type: "integer"; min: number; max: number; optional?: boolean };
 
 export interface ModelCapabilities {
   generationType: GenerationType;
@@ -65,6 +66,11 @@ export interface ModelDefinition {
   settings: Record<string, SettingField>;
   endpoints: ModelEndpoints;
   pricing: VideoPricing | ImagePricing;
+  /**
+   * How the outputs-count setting is sent to the platform, e.g. Soul's
+   * integer `batch_size`. Unset = never sent (only used for estimates).
+   */
+  countParam?: { bodyKey: string };
   /** Short marketing line shown in the picker. */
   blurb: string;
 }

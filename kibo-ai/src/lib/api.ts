@@ -1,6 +1,8 @@
 export interface ApiGeneration {
   id: string;
   project_id: string | null;
+  brand_id: string | null;
+  template_id: string | null;
   provider: string;
   model: string;
   generation_type: "image" | "video";
@@ -45,6 +47,7 @@ export interface ApiModel {
     | { type: "enum"; values: readonly string[]; default: string }
     | { type: "range"; min: number; max: number; default: number; step?: number }
     | { type: "boolean"; default: boolean }
+    | { type: "integer"; min: number; max: number; optional?: boolean }
   >;
 }
 
@@ -53,6 +56,46 @@ export interface ApiProject {
   name: string;
   description: string | null;
   created_at: string;
+}
+
+export interface ApiBrand {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  logo_url: string | null;
+  colors: string[];
+  industry: string | null;
+  target_audience: string | null;
+  visual_style: string | null;
+  ad_tone: string | null;
+  default_cta: string | null;
+  created_at: string;
+}
+
+export interface ApiTemplate {
+  id: string;
+  user_id: string | null;
+  name: string;
+  description: string | null;
+  prompt_structure: string;
+  aspect_ratio: string | null;
+  recommended_models: string[];
+  duration_seconds: number | null;
+  is_public: boolean;
+  created_at: string;
+}
+
+/** Compose brand context into a prompt. Shown as preview; stored combined. */
+export function applyBrand(prompt: string, brand: ApiBrand): string {
+  const parts: string[] = [];
+  if (brand.visual_style) parts.push(`Visual style: ${brand.visual_style}`);
+  if (brand.ad_tone) parts.push(`Tone: ${brand.ad_tone}`);
+  if (brand.target_audience) parts.push(`Audience: ${brand.target_audience}`);
+  if (brand.industry) parts.push(`Industry: ${brand.industry}`);
+  if (brand.default_cta) parts.push(`Call to action: ${brand.default_cta}`);
+  if (parts.length === 0) return prompt;
+  return `[Brand: ${brand.name}. ${parts.join(". ")}]\n\n${prompt}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -85,6 +128,10 @@ export const api = {
   },
   getGeneration: (id: string) =>
     request<{ generation: ApiGeneration }>(`/api/generations/${id}`),
+  getAssets: (id: string) =>
+    request<{ assets: Array<{ id: string; url: string | null; mimeType: string | null }> }>(
+      `/api/generations/${id}/assets`,
+    ),
   deleteGeneration: (id: string) =>
     request<{ ok: true }>(`/api/generations/${id}`, { method: "DELETE" }),
   toggleFavorite: (id: string) =>
@@ -100,6 +147,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, description }),
     }),
+  renameProject: (id: string, name: string) =>
+    request<{ project: ApiProject }>(`/api/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+  deleteProject: (id: string) =>
+    request<{ ok: true }>(`/api/projects/${id}`, { method: "DELETE" }),
   stats: () =>
     request<{
       stats: {
@@ -115,10 +169,45 @@ export const api = {
       usage: {
         totalSpend: number;
         generations: number;
+        monthSpend: number;
+        monthlyLimit: number | null;
         byModel: Array<{ model: string; spend: number; count: number }>;
         byDay: Array<{ day: string; spend: number; count: number }>;
+        byProject: Array<{
+          projectId: string;
+          projectName: string;
+          spend: number;
+          count: number;
+        }>;
       };
     }>(`/api/usage?days=${days}`),
+  brands: () => request<{ brands: ApiBrand[] }>("/api/brands"),
+  createBrand: (body: Record<string, unknown>) =>
+    request<{ brand: ApiBrand }>("/api/brands", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateBrand: (id: string, body: Record<string, unknown>) =>
+    request<{ brand: ApiBrand }>(`/api/brands/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteBrand: (id: string) => request<{ ok: true }>(`/api/brands/${id}`, { method: "DELETE" }),
+  templates: () => request<{ templates: ApiTemplate[] }>("/api/templates"),
+  getTemplate: (id: string) => request<{ template: ApiTemplate }>(`/api/templates/${id}`),
+  createTemplate: (body: Record<string, unknown>) =>
+    request<{ template: ApiTemplate }>("/api/templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteTemplate: (id: string) =>
+    request<{ ok: true }>(`/api/templates/${id}`, { method: "DELETE" }),
+  spendingLimit: () => request<{ limit: number | null }>("/api/limits"),
+  setSpendingLimit: (monthlyLimitUsd: number | null) =>
+    request<{ limit: number | null }>("/api/limits", {
+      method: "PUT",
+      body: JSON.stringify({ monthlyLimitUsd }),
+    }),
 };
 
 export async function uploadFile(file: File): Promise<string> {

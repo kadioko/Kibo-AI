@@ -19,6 +19,8 @@ export interface GenerationRow {
   id: string;
   user_id: string;
   project_id: string | null;
+  brand_id: string | null;
+  template_id: string | null;
   provider: string;
   model: string;
   generation_type: "image" | "video";
@@ -55,6 +57,10 @@ export function isTerminal(status: GenerationStatusValue): boolean {
 
 type Db = Awaited<ReturnType<typeof createServiceClient>>;
 
+function httpError(status: number, message: string): Error {
+  return Object.assign(new Error(message), { status });
+}
+
 async function updateRow(db: Db, id: string, userId: string, patch: Partial<GenerationRow>) {
   const { error } = await db
     .from("generations")
@@ -83,14 +89,6 @@ export async function createGenerationRecord(
   });
 
   const provider = getProvider("higgsfield");
-  const queued = await provider.createGeneration({
-    model: model.id,
-    generationType: body.generationType,
-    prompt: body.prompt,
-    negativePrompt: body.negativePrompt,
-    inputAssets: body.inputAssets,
-    settings,
-  });
 
   const db = await createServiceClient();
   if (body.projectId) {
@@ -102,12 +100,42 @@ export async function createGenerationRecord(
       .maybeSingle();
     if (!project) throw new Error("Project not found");
   }
+  if (body.brandId) {
+    const { data: brand } = await db
+      .from("brand_profiles")
+      .select("id")
+      .eq("id", body.brandId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!brand) throw new Error("Brand not found");
+  }
+  if (body.templateId) {
+    const { data: template } = await db
+      .from("prompt_templates")
+      .select("id")
+      .eq("id", body.templateId)
+      .maybeSingle();
+    if (!template) throw new Error("Template not found");
+  }
+
+  await enforceSpendingLimit(db, userId, estimate.amountUsd);
+
+  const queued = await provider.createGeneration({
+    model: model.id,
+    generationType: body.generationType,
+    prompt: body.prompt,
+    negativePrompt: body.negativePrompt,
+    inputAssets: body.inputAssets,
+    settings,
+  });
 
   const { data, error } = await db
     .from("generations")
     .insert({
       user_id: userId,
       project_id: body.projectId ?? null,
+      brand_id: body.brandId ?? null,
+      template_id: body.templateId ?? null,
       provider: "higgsfield",
       model: model.id,
       generation_type: body.generationType,
@@ -123,6 +151,35 @@ export async function createGenerationRecord(
     .single();
   if (error || !data) throw new Error(`DB insert failed: ${error?.message ?? "unknown"}`);
   return data as GenerationRow;
+}
+
+/** Block the submit (before billing) when the monthly limit is exhausted. */
+async function enforceSpendingLimit(db: Db, userId: string, estimateUsd: number) {
+  const { data: limit } = await db
+    .from("spending_limits")
+    .select("monthly_limit_usd")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const cap = (limit as { monthly_limit_usd: number } | null)?.monthly_limit_usd;
+  if (!cap) return;
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const { data: logs } = await db
+    .from("usage_logs")
+    .select("cost_usd")
+    .eq("user_id", userId)
+    .gte("created_at", monthStart.toISOString());
+  const spent = ((logs ?? []) as Array<{ cost_usd: number }>).reduce(
+    (sum, r) => sum + Number(r.cost_usd),
+    0,
+  );
+  if (spent + estimateUsd > Number(cap)) {
+    throw httpError(
+      402,
+      `Monthly spending limit of $${Number(cap).toFixed(2)} reached ($${spent.toFixed(2)} spent). Raise it in Settings to continue.`,
+    );
+  }
 }
 
 /**
@@ -280,4 +337,46 @@ export async function favoriteIds(userId: string): Promise<Set<string>> {
   const db = await createServiceClient();
   const { data } = await db.from("favorites").select("generation_id").eq("user_id", userId);
   return new Set((data ?? []).map((f: { generation_id: string }) => f.generation_id));
+}
+
+export interface SerializedAsset {
+  id: string;
+  url: string | null;
+  mimeType: string | null;
+}
+
+/** All stored output files for a generation (batch of N), newest last. */
+export async function listAssets(
+  userId: string,
+  generationId: string,
+): Promise<SerializedAsset[]> {
+  const db = await createServiceClient();
+  const { data: generation } = await db
+    .from("generations")
+    .select("id")
+    .eq("id", generationId)
+    .eq("user_id", userId)
+    .single();
+  if (!generation) throw new Error("Generation not found");
+  const { data, error } = await db
+    .from("generation_assets")
+    .select("id,storage_path,mime_type,created_at")
+    .eq("generation_id", generationId)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`Assets query failed: ${error.message}`);
+  const rows = (data ?? []) as Array<{
+    id: string;
+    storage_path: string;
+    mime_type: string | null;
+    created_at: string;
+  }>;
+  return Promise.all(
+    rows.map(async (r) => {
+      const { data: signed } = await db.storage
+        .from(OUTPUTS_BUCKET)
+        .createSignedUrl(r.storage_path, SIGNED_URL_TTL_SECONDS);
+      return { id: r.id, url: signed?.signedUrl ?? null, mimeType: r.mime_type };
+    }),
+  );
 }

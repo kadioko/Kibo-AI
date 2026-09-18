@@ -9,6 +9,8 @@ export default function ProjectsPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   useEffect(() => {
     api.projects().then((r) => setProjects(r.projects)).catch(() => {});
@@ -26,6 +28,30 @@ export default function ProjectsPage() {
       setError(e instanceof Error ? e.message : "Create failed");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function saveRename(id: string) {
+    if (!editName.trim()) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      const { project } = await api.renameProject(id, editName.trim());
+      setProjects((prev) => prev.map((p) => (p.id === id ? project : p)));
+      setEditingId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Rename failed");
+    }
+  }
+
+  async function remove(id: string, projectName: string) {
+    if (!confirm(`Delete “${projectName}”? Its generations stay in your library.`)) return;
+    try {
+      await api.deleteProject(id);
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
     }
   }
 
@@ -66,16 +92,50 @@ export default function ProjectsPage() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {projects.map((p) => (
-          <Link
+          <div
             key={p.id}
-            href={`/library?project=${p.id}`}
             className="rounded-2xl border border-edge bg-panel p-4 transition hover:border-faint"
           >
-            <p className="font-semibold">{p.name}</p>
+            {editingId === p.id ? (
+              <input
+                autoFocus
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={() => void saveRename(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveRename(p.id);
+                  if (e.key === "Escape") setEditingId(null);
+                }}
+                className="w-full rounded-lg border border-accent bg-panel-2 px-2 py-1 text-sm font-semibold outline-none"
+              />
+            ) : (
+              <Link href={`/library?project=${p.id}`} className="font-semibold hover:text-accent">
+                {p.name}
+              </Link>
+            )}
             <p className="mt-1 text-xs text-faint">
               Created {new Date(p.created_at).toLocaleDateString()}
             </p>
-          </Link>
+            <div className="mt-2 flex gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditName(p.name);
+                  setEditingId(p.id);
+                }}
+                className="rounded-lg px-2 py-1 text-xs text-mute transition hover:bg-panel-2 hover:text-ink"
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                onClick={() => void remove(p.id, p.name)}
+                className="rounded-lg px-2 py-1 text-xs text-mute transition hover:bg-panel-2 hover:text-red-300"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         ))}
       </div>
       {projects.length === 0 && (

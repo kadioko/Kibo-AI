@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "@/lib/auth-actions";
+import { SpendingLimitForm } from "@/components/spending-limit-form";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -37,10 +38,20 @@ export default async function SettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-edge bg-panel p-5">
+        <h2 className="font-semibold">Monthly spending limit</h2>
+        <p className="mb-3 mt-1 text-sm text-mute">
+          Hard cap on billed generations per calendar month. Estimates count
+          toward the cap before anything is submitted.
+        </p>
+        <SpendingLimitForm />
+      </section>
+
+      <section className="rounded-2xl border border-edge bg-panel p-5">
         <h2 className="font-semibold">Cost control</h2>
         <p className="mt-2 text-sm text-mute">
-          Spending limits and budgets arrive in Phase 2. Today every generation shows its
-          estimated cost before you submit, and the Usage page tracks real spend.
+          Every generation shows its estimated cost before you submit, the
+          Usage page tracks real spend by model, project and day, and the cap
+          above blocks new work once it is reached.
         </p>
       </section>
     </div>

@@ -39,14 +39,21 @@ usage_logs. RLS: user-owned rows only; public read on catalog tables.
   live status (no refresh), library (search, filters, download/favorite/
   reuse/delete), storage copy + signed URLs, pre-submit cost estimates,
   zod validation, rate limiting, projects CRUD.
-- [ ] **Phase 2:** brand profiles (+ prompt-context injection), prompt
-  templates (apply to Create), usage depth (spend by project), spending
-  limits, team projects. Tables already exist.
+- [x] **Phase 1 polish:** docs-verified pricing (Soul 2 $0.0032/img, Seedance
+  2.5 $0.1234/s, Kling $0.084/s std, Wan 3 $0.05/s; estimates use list rates,
+  account discounts lower the real charge), corrected Recraft endpoint +
+  schemas (integer batch_size, sound on/off, aspect allow-lists, seed input),
+  negative_prompt gated on capability, project rename/delete, ⚡Regenerate
+  (reuse + auto-submit), multi-output viewer modal.
+- [x] **Phase 2:** brand profiles CRUD + prompt-context injection on Create,
+  prompt templates (9 public seeds + custom, model/aspect/duration applied on
+  Create), monthly spending limits (migration 0002, 402 enforcement
+  pre-submit, Settings UI, Usage budget bar), spend by project.
 - [ ] **Phase 3:** prompt assistant service + LLM wiring, credits/billing,
-  second provider via `GenerationProvider`.
+  second provider via `GenerationProvider`, webhooks.
 
 ## 7. To run it
 
-Supabase project → run migration → create `kibo-inputs` (public) +
-`kibo-outputs` (private) buckets → Higgsfield key → `.env.local` →
-`npm run dev`. Details in `kibo-ai/README.md`.
+Supabase project → run migrations 0001 + 0002 → create `kibo-inputs`
+(public) + `kibo-outputs` (private) buckets → Higgsfield key → `.env.local`
+→ `npm run dev`. Details in `kibo-ai/README.md`.

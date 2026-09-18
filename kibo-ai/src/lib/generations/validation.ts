@@ -15,11 +15,17 @@ export const createGenerationSchema = z.object({
   prompt: z.string().trim().min(1).max(5000),
   negativePrompt: z.string().trim().max(2000).optional(),
   projectId: z.string().uuid().optional(),
+  brandId: z.string().uuid().optional(),
+  templateId: z.string().uuid().optional(),
   inputAssets: z.array(inputAssetSchema).max(15).default([]),
   settings: z.record(z.string(), z.unknown()).default({}),
 });
 
-export const estimateSchema = createGenerationSchema.omit({ projectId: true });
+export const estimateSchema = createGenerationSchema.omit({
+  projectId: true,
+  brandId: true,
+  templateId: true,
+});
 
 export const listQuerySchema = z.object({
   type: z.enum(["all", "image", "video", "favorites"]).default("all"),

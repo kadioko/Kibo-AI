@@ -23,8 +23,10 @@ credentials. Do not commit `.env.local` or any API credentials.
 ## 1. Supabase setup
 
 1. Create a project at supabase.com.
-2. **SQL editor** → run `supabase/migrations/0001_kibo_init.sql`
-   (tables, indexes, RLS policies, `higgsfield` provider seed).
+2. **SQL editor** → run in order:
+   - `supabase/migrations/0001_kibo_init.sql` (tables, RLS, provider seed)
+   - `supabase/migrations/0002_phase2.sql` (brand/template links, spending
+     limits, public template seeds)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).
@@ -96,11 +98,15 @@ supabase/migrations/  Postgres schema + RLS
 ## Roadmap
 
 - **Phase 1 ✓** — auth, dashboard, Higgsfield integration, model registry,
-  image+video generation, live status, library, secure storage, cost estimates.
-- **Phase 2** — brand profiles, prompt templates, usage analytics depth,
-  spending limits, team projects (tables already in schema).
-- **Phase 3** — prompt assistant (LLM), credits/billing, extra providers
-  (drop a new `GenerationProvider` into `src/lib/providers/`).
+  image+video generation, live status, library, secure storage, cost estimates,
+  projects CRUD, regenerate, multi-output viewer.
+- **Phase 2 ✓** — brand profiles (+ prompt injection on Create), prompt
+  templates (9 seeds + custom, wired into Create), monthly spending limits
+  (enforced pre-submit, managed in Settings, budget bar in Usage), spend by
+  project.
+- **Phase 3** — prompt assistant service + LLM wiring, credits/billing,
+  extra providers (drop a new `GenerationProvider` into `src/lib/providers/`),
+  webhook endpoint (polling works).
 
 ## Troubleshooting
 
