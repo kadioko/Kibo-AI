@@ -26,7 +26,9 @@ export async function resetPassword(formData: FormData) {
   const supabase = await createClient();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${appUrl}/login?mode=login`,
+    // Recovery links land here to exchange the code, then continue to
+    // Settings where the new password is set.
+    redirectTo: `${appUrl}/auth/confirm?next=/settings`,
   });
   if (error) redirect(`/login?mode=reset&error=${encodeURIComponent(error.message)}`);
   redirect("/login?mode=login&notice=Check%20your%20email%20for%20a%20reset%20link.");

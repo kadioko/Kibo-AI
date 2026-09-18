@@ -16,12 +16,15 @@ const ROLE_LABEL: Record<Role, string> = {
 };
 
 const ACCEPT: Record<Role, string> = {
-  start: "image/*",
-  end: "image/*",
-  reference: "image/*",
+  start: "image/jpeg,image/png,image/webp,image/gif",
+  end: "image/jpeg,image/png,image/webp,image/gif",
+  reference: "image/jpeg,image/png,image/webp,image/gif",
   video: "video/mp4",
-  audio: "audio/wav,audio/mpeg",
+  audio: "audio/wav,audio/x-wav,audio/mpeg",
 };
+
+/** Stop auto-polling a single generation after this long (it still lands). */
+const POLL_DEADLINE_MS = 10 * 60_000;
 
 /** Drop a previously injected brand block so reuse edits clean words. */
 function stripBrandBlock(prompt: string): string {
@@ -52,6 +55,9 @@ function CreateStudio() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // React StrictMode (dev) mounts, unmounts and remounts: without this guard
+  // the ?regenerate= auto-submit would bill twice.
+  const initRan = useRef(false);
 
   const model = useMemo(() => models.find((m) => m.id === modelId), [models, modelId]);
   const typeModels = useMemo(() => models.filter((m) => m.generationType === type), [models, type]);
@@ -74,6 +80,8 @@ function CreateStudio() {
   // submitAndWatch is invoked from .then continuations (async context),
   // never synchronously in the effect body.
   useEffect(() => {
+    if (initRan.current) return;
+    initRan.current = true;
     Promise.all([api.models(), api.projects(), api.brands()])
       .then(async ([m, p, b]) => {
         setModels(m.models);
@@ -251,7 +259,14 @@ function CreateStudio() {
 
   function watchLive(id: string) {
     stopPolling();
+    const startedAt = Date.now();
     pollTimer.current = setInterval(async () => {
+      if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+        stopPolling();
+        setSubmitting(false);
+        setError("Still working after 10 minutes — it will land in your library when done.");
+        return;
+      }
       try {
         const { generation: fresh } = await api.getGeneration(id);
         setLive(fresh);

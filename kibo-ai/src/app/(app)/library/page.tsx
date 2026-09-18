@@ -162,11 +162,22 @@ function LibraryStudio() {
       });
   }
 
-  // Live-refresh in-flight generations every 5s.
+  // Live-refresh in-flight generations every 5s. Rows older than 15 min
+  // stop auto-refreshing (stuck provider-side) — opening them still polls
+  // once on demand via the viewer.
   useEffect(() => {
     if (!items.some((g) => g.status === "queued" || g.status === "processing")) return;
     const t = setInterval(async () => {
-      const flying = items.filter((g) => g.status === "queued" || g.status === "processing");
+      const cutoff = Date.now() - 15 * 60_000;
+      const flying = items.filter(
+        (g) =>
+          (g.status === "queued" || g.status === "processing") &&
+          new Date(g.created_at).getTime() > cutoff,
+      );
+      if (flying.length === 0) {
+        clearInterval(t);
+        return;
+      }
       try {
         const updated = await Promise.all(flying.map((g) => api.getGeneration(g.id)));
         setItems((prev) =>

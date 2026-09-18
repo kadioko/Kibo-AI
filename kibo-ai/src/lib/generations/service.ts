@@ -149,7 +149,17 @@ export async function createGenerationRecord(
     })
     .select()
     .single();
-  if (error || !data) throw new Error(`DB insert failed: ${error?.message ?? "unknown"}`);
+  if (error || !data) {
+    // The provider already billed this request — cancel it so it cannot
+    // run (and cost) with nowhere to land. Best effort: the insert error
+    // is what the caller must see.
+    try {
+      await provider.cancelGeneration(queued.providerRequestId);
+    } catch {
+      // Provider cancel is best-effort; the row error below takes precedence.
+    }
+    throw new Error(`DB insert failed: ${error?.message ?? "unknown"}`);
+  }
   return data as GenerationRow;
 }
 
@@ -243,6 +253,24 @@ export async function refreshGenerationRecord(
   }
 
   // completed — copy media into our own storage, then finalize.
+  // Idempotency: two concurrent polls can both observe "completed".
+  // Re-read the row and bail if a sibling request already finalized it;
+  // the usage log is additionally guarded by a generation_id lookup.
+  const { data: latest } = await db
+    .from("generations")
+    .select("status")
+    .eq("id", row.id)
+    .eq("user_id", userId)
+    .single();
+  if (latest && isTerminal((latest as { status: GenerationStatusValue }).status)) {
+    const { data: fresh } = await db
+      .from("generations")
+      .select("*")
+      .eq("id", row.id)
+      .eq("user_id", userId)
+      .single();
+    return (fresh ?? row) as GenerationRow;
+  }
   const stored = await copyOutputsToStorage(db, row, status.outputUrls);
   const primary = stored[0];
   await updateRow(db, row.id, userId, {
@@ -254,14 +282,21 @@ export async function refreshGenerationRecord(
     completed_at: new Date().toISOString(),
     error: null,
   });
-  await db.from("usage_logs").insert({
-    user_id: userId,
-    generation_id: row.id,
-    provider: row.provider,
-    model: row.model,
-    project_id: row.project_id,
-    cost_usd: row.estimated_cost ?? 0,
-  });
+  const { data: logged } = await db
+    .from("usage_logs")
+    .select("id")
+    .eq("generation_id", row.id)
+    .maybeSingle();
+  if (!logged) {
+    await db.from("usage_logs").insert({
+      user_id: userId,
+      generation_id: row.id,
+      provider: row.provider,
+      model: row.model,
+      project_id: row.project_id,
+      cost_usd: row.estimated_cost ?? 0,
+    });
+  }
 
   const { data: fresh } = await db
     .from("generations")
@@ -281,17 +316,28 @@ async function copyOutputsToStorage(
   const ext = row.generation_type === "video" ? "mp4" : "png";
   const mime = row.generation_type === "video" ? "video/mp4" : "image/png";
 
+  // Skip files a sibling finalize already stored (same deterministic path).
+  const { data: existing } = await db
+    .from("generation_assets")
+    .select("storage_path")
+    .eq("generation_id", row.id);
+  const have = new Set(((existing ?? []) as Array<{ storage_path: string }>).map((a) => a.storage_path));
+
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i]!;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
     try {
+      const storagePath = `${row.user_id}/${row.id}/${i}.${ext}`;
+      if (have.has(storagePath)) {
+        stored.push({ storagePath, mimeType: mime });
+        continue;
+      }
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error(`Provider CDN returned ${res.status}`);
       const buffer = Buffer.from(await res.arrayBuffer());
       if (buffer.length > MAX_COPY_BYTES) throw new Error("Output file too large");
       const contentType = res.headers.get("content-type") ?? mime;
-      const storagePath = `${row.user_id}/${row.id}/${i}.${ext}`;
       const { error } = await db.storage
         .from(OUTPUTS_BUCKET)
         .upload(storagePath, buffer, { contentType, upsert: true });

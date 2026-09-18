@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser, toHttpError } from "@/lib/auth";
 import {
+  OUTPUTS_BUCKET,
   favoriteIds,
   isTerminal,
   refreshGenerationRecord,
@@ -56,6 +57,19 @@ export async function DELETE(_request: Request, { params }: Params) {
       .eq("id", id)
       .eq("user_id", user.id);
     if (error) throw new Error(`Delete failed: ${error.message}`);
+
+    // Remove the private bucket objects too — the DB cascade clears the
+    // asset rows, but bucket files would otherwise leak forever.
+    // Best-effort: the row is already gone, so failures only log.
+    try {
+      const { data: files } = await db.storage.from(OUTPUTS_BUCKET).list(`${user.id}/${id}`);
+      const paths = (files ?? [])
+        .filter((f) => f.id !== null)
+        .map((f) => `${user.id}/${id}/${f.name}`);
+      if (paths.length > 0) await db.storage.from(OUTPUTS_BUCKET).remove(paths);
+    } catch (err) {
+      console.error("[generations] storage cleanup failed", err instanceof Error ? err.message : err);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     const { status, message } = toHttpError(error);

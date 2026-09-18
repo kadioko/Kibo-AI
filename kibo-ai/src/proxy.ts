@@ -27,12 +27,17 @@ export default async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthPage = request.nextUrl.pathname.startsWith("/login");
+  const pathname = request.nextUrl.pathname;
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/auth/confirm");
   const isPublicAsset =
-    request.nextUrl.pathname.startsWith("/_next") ||
-    request.nextUrl.pathname.startsWith("/api/webhooks");
+    pathname.startsWith("/_next") || pathname.startsWith("/api/webhooks");
 
-  if (!user && !isAuthPage && !isPublicAsset && request.nextUrl.pathname !== "/") {
+  // API clients expect JSON, not a login-page redirect.
+  if (!user && pathname.startsWith("/api/") && !isPublicAsset) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!user && !isAuthPage && !isPublicAsset && pathname !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

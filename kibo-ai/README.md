@@ -31,7 +31,10 @@ credentials. Do not commit `.env.local` or any API credentials.
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).
    - `kibo-outputs` — **PRIVATE** (finished media; served via signed URLs).
-4. **Authentication** → enable Email provider.
+4. **Authentication** → enable Email provider. Under URL Configuration, add
+   your app URL and include `/auth/confirm` in the redirect allow-list
+   (e.g. `http://localhost:3000/auth/confirm`, `https://<app>/auth/confirm`)
+   so password-reset and email-confirmation links complete.
 
 ## 2. Environment
 
