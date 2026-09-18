@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, formatUsd, type ApiGeneration, type ApiModel } from "@/lib/api";
+import { api, formatUsd, type ApiGeneration, type ApiModel, type ApiProject } from "@/lib/api";
 import { GenerationCard } from "@/components/generation-card";
 
 export default function DashboardPage() {
@@ -15,14 +15,16 @@ export default function DashboardPage() {
   } | null>(null);
   const [recent, setRecent] = useState<ApiGeneration[]>([]);
   const [models, setModels] = useState<ApiModel[]>([]);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.stats(), api.listGenerations({ limit: "8" }), api.models()])
-      .then(([s, r, m]) => {
+    Promise.all([api.stats(), api.listGenerations({ limit: "8" }), api.models(), api.projects()])
+      .then(([s, r, m, p]) => {
         setStats(s.stats);
         setRecent(r.generations);
         setModels(m.models);
+        setProjects(p.projects.slice(0, 4));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
   }, []);
@@ -125,6 +127,31 @@ export default function DashboardPage() {
           ))}
         </div>
       </section>
+
+      {projects.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Recent projects</h2>
+            <Link href="/projects" className="text-sm text-mute transition hover:text-ink">
+              All projects →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {projects.map((p) => (
+              <Link
+                key={p.id}
+                href={`/library?project=${p.id}`}
+                className="rounded-2xl border border-edge bg-panel p-4 transition hover:border-faint"
+              >
+                <p className="font-medium">{p.name}</p>
+                <p className="mt-1 text-xs text-faint">
+                  {p.team_id ? "Team project" : "Personal"}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

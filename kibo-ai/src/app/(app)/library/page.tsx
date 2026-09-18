@@ -19,9 +19,10 @@ interface FilterState {
   model: string;
   project: string;
   search: string;
+  days: string;
 }
 
-const INITIAL_FILTERS: FilterState = { type: "all", model: "", project: "", search: "" };
+const INITIAL_FILTERS: FilterState = { type: "all", model: "", project: "", search: "", days: "" };
 
 export default function LibraryPage() {
   return (
@@ -40,6 +41,7 @@ function LibraryStudio() {
   const [model, setModel] = useState("");
   const [project, setProject] = useState("");
   const [search, setSearch] = useState("");
+  const [days, setDays] = useState("");
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -54,6 +56,7 @@ function LibraryStudio() {
     if (f.model) params.model = f.model;
     if (f.project) params.projectId = f.project;
     if (f.search.trim()) params.search = f.search.trim();
+    if (f.days) params.days = f.days;
     if (cursor) params.cursor = cursor;
     return params;
   }
@@ -124,24 +127,29 @@ function LibraryStudio() {
 
   function selectTab(next: Filter) {
     setTab(next);
-    refresh({ type: next, model, project, search });
+    refresh({ type: next, model, project, search, days });
   }
 
   function selectModel(next: string) {
     setModel(next);
-    refresh({ type: tab, model: next, project, search });
+    refresh({ type: tab, model: next, project, search, days });
   }
 
   function selectProject(next: string) {
     setProject(next);
-    refresh({ type: tab, model, project: next, search });
+    refresh({ type: tab, model, project: next, search, days });
+  }
+
+  function selectDays(next: string) {
+    setDays(next);
+    refresh({ type: tab, model, project, search, days: next });
   }
 
   function changeSearch(next: string) {
     setSearch(next);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
-      refresh({ type: tab, model, project, search: next });
+      refresh({ type: tab, model, project, search: next, days });
     }, 400);
   }
 
@@ -149,7 +157,7 @@ function LibraryStudio() {
     if (!cursorRef.current || loadingMore) return;
     setLoadingMore(true);
     api
-      .listGenerations(paramsFor({ type: tab, model, project, search }, cursorRef.current))
+      .listGenerations(paramsFor({ type: tab, model, project, search, days }, cursorRef.current))
       .then((res) => {
         setItems((prev) => [...prev, ...res.generations]);
         cursorRef.current = res.nextCursor;
@@ -218,7 +226,7 @@ function LibraryStudio() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <input
           value={search}
           onChange={(e) => changeSearch(e.target.value)}
@@ -228,6 +236,7 @@ function LibraryStudio() {
         <select
           value={model}
           onChange={(e) => selectModel(e.target.value)}
+          aria-label="Filter by model"
           className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">All models</option>
@@ -240,6 +249,7 @@ function LibraryStudio() {
         <select
           value={project}
           onChange={(e) => selectProject(e.target.value)}
+          aria-label="Filter by project"
           className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">All projects</option>
@@ -248,6 +258,17 @@ function LibraryStudio() {
               {p.name}
             </option>
           ))}
+        </select>
+        <select
+          value={days}
+          onChange={(e) => selectDays(e.target.value)}
+          aria-label="Filter by date"
+          className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
+        >
+          <option value="">All time</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
         </select>
       </div>
 

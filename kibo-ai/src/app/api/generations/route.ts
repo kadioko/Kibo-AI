@@ -35,6 +35,10 @@ export async function GET(request: Request) {
     if (q.model) query = query.eq("model", q.model);
     if (q.projectId) query = query.eq("project_id", q.projectId);
     if (q.search) query = query.ilike("prompt", `%${q.search}%`);
+    if (q.days) {
+      const since = new Date(Date.now() - q.days * 24 * 3600_000).toISOString();
+      query = query.gte("created_at", since);
+    }
     if (q.cursor) {
       const [createdAt, id] = q.cursor.split("|");
       if (createdAt && id) {

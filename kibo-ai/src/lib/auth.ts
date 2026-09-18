@@ -25,5 +25,8 @@ export function toHttpError(error: unknown): { status: number; message: string }
     const status = (error as { status?: unknown }).status;
     if (typeof status === "number") return { status, message: error.message };
   }
+  if (error instanceof Error && /^(Unknown (model|provider|endpoint)|Invalid model)/.test(error.message)) {
+    return { status: 400, message: error.message };
+  }
   return { status: 500, message: error instanceof Error ? error.message : "Server error" };
 }

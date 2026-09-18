@@ -37,6 +37,7 @@ export const listQuerySchema = z.object({
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   cursor: z.string().optional(),
+  days: z.coerce.number().int().min(1).max(365).optional(),
 });
 
 export type CreateGenerationBody = z.infer<typeof createGenerationSchema>;
