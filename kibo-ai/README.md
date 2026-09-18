@@ -4,6 +4,10 @@ Mobile-first studio for generating images and videos with frontier AI models
 through the Higgsfield API. Next.js App Router · TypeScript · Tailwind ·
 Supabase (Auth, Postgres, Storage) · Vercel.
 
+Repository-level documentation is available in the parent directory:
+[architecture](../docs/ARCHITECTURE.md), [deployment](../docs/DEPLOYMENT.md),
+[contributing](../CONTRIBUTING.md), and [security](../SECURITY.md).
+
 ## Quick start
 
 ```bash
@@ -12,6 +16,9 @@ npm install
 cp .env.example .env.local   # then fill in the values below
 npm run dev                  # http://localhost:3000
 ```
+
+**Requirements:** Node.js 20.9 or later, a Supabase project, and Higgsfield API
+credentials. Do not commit `.env.local` or any API credentials.
 
 ## 1. Supabase setup
 
@@ -46,6 +53,8 @@ vercel --prod
 ```
 
 Set the same env vars in Vercel → Project → Settings → Environment Variables.
+Set `kibo-ai` as the Vercel project root directory, then add the deployed URL
+to Supabase Authentication's Site URL and redirect allow-list.
 
 ## Generation flow
 
@@ -92,3 +101,13 @@ supabase/migrations/  Postgres schema + RLS
   spending limits, team projects (tables already in schema).
 - **Phase 3** — prompt assistant (LLM), credits/billing, extra providers
   (drop a new `GenerationProvider` into `src/lib/providers/`).
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Login redirects repeatedly | Confirm the Supabase URL and anonymous key, and add the local/deployed URL to the Supabase Auth redirect allow-list. |
+| Upload fails | Confirm `kibo-inputs` exists and is public, and that the selected media type is JPEG, PNG, WebP, GIF, MP4, WAV, or MPEG audio. |
+| Generation submit fails | Confirm both Higgsfield credentials are present on the server and that the model endpoint is available to the Higgsfield account. |
+| Generation never completes | The current app refreshes provider status while the client polls. Return to the Library or generation screen and inspect the stored provider error. |
+| Output does not display | Confirm `kibo-outputs` exists and is private; the app creates a fresh signed URL when it serializes a generation. |
