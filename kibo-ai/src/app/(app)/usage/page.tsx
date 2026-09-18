@@ -15,12 +15,21 @@ export default function UsagePage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Stale-while-revalidate: the previous range stays visible while the new
+  // one loads; all state updates happen in async continuations.
   useEffect(() => {
-    setUsage(null);
+    let live = true;
     api
       .usage(days)
-      .then((r) => setUsage(r.usage))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+      .then((r) => {
+        if (live) setUsage(r.usage);
+      })
+      .catch((e) => {
+        if (live) setError(e instanceof Error ? e.message : "Failed to load");
+      });
+    return () => {
+      live = false;
+    };
   }, [days]);
 
   const maxDay = Math.max(0.01, ...(usage?.byDay.map((d) => d.spend) ?? [0]));

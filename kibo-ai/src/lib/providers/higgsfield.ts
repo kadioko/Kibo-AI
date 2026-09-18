@@ -51,9 +51,6 @@ export interface HiggsfieldClientOptions {
 
 const MODEL_ENDPOINT = /^[a-z0-9][a-z0-9._/-]*$/i;
 
-/** Statuses the platform never moves off again. */
-const TERMINAL = new Set(["completed", "failed", "nsfw", "canceled", "cancelled"]);
-
 function mapStatus(raw: string): GenerationStatusValue {
   switch (raw.toLowerCase()) {
     case "completed":

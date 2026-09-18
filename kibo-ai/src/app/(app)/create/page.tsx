@@ -88,25 +88,27 @@ function CreateStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep a valid model selected when switching type.
-  useEffect(() => {
-    if (!model || model.generationType !== type) {
-      const first = typeModels[0];
-      if (first) {
-        setModelId(first.id);
-        setAssets([]);
-      }
+  // Keep a valid model selected when switching type — handled in the
+  // switcher below so no render-cascading effect is needed.
+  function switchType(next: "image" | "video") {
+    setType(next);
+    const current = models.find((m) => m.id === modelId);
+    if (!current || current.generationType !== next) {
+      const first = models.find((m) => m.generationType === next);
+      setModelId(first ? first.id : "");
+      setAssets([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  }
 
-  // Debounced cost estimate.
+  // Debounced cost estimate. State only changes inside the timeout
+  // callback, never synchronously in the effect body.
   useEffect(() => {
-    if (!model || !prompt.trim()) {
-      setEstimate(null);
-      return;
-    }
+    if (!model) return;
     const t = setTimeout(async () => {
+      if (!prompt.trim()) {
+        setEstimate(null);
+        return;
+      }
       try {
         const res = await api.estimate({
           model: model.id,
@@ -219,7 +221,7 @@ function CreateStudio() {
           <button
             key={t}
             type="button"
-            onClick={() => setType(t)}
+            onClick={() => switchType(t)}
             className={`rounded-xl px-4 py-2.5 text-sm font-medium capitalize transition ${
               type === t ? "bg-accent text-accent-ink" : "text-mute hover:text-ink"
             }`}

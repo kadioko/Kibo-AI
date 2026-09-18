@@ -4,28 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
   try {
-    const user = await requireUser();
+    await requireUser();
     const supabase = await createClient();
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const base = supabase.from("generations").select("id", { count: "exact", head: true });
+    const countHeads = () =>
+      supabase.from("generations").select("id", { count: "exact", head: true });
     const [month, images, videos, spend, active] = await Promise.all([
-      supabase
-        .from("generations")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", monthStart.toISOString()),
-      base.eq("generation_type", "image"),
-      base.eq("generation_type", "video"),
+      countHeads().gte("created_at", monthStart.toISOString()),
+      countHeads().eq("generation_type", "image"),
+      countHeads().eq("generation_type", "video"),
       supabase.from("usage_logs").select("cost_usd").gte("created_at", monthStart.toISOString()),
-      supabase
-        .from("generations")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["queued", "processing"]),
+      countHeads().in("status", ["queued", "processing"]),
     ]);
 
-    void user;
     const totalSpend = ((spend.data ?? []) as Array<{ cost_usd: number }>).reduce(
       (sum, r) => sum + Number(r.cost_usd),
       0,

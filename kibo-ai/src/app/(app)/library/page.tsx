@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api, type ApiGeneration, type ApiModel, type ApiProject } from "@/lib/api";
 import { GenerationCard } from "@/components/generation-card";
 
@@ -13,6 +13,15 @@ const TABS: Array<{ id: Filter; label: string }> = [
   { id: "video", label: "Videos" },
   { id: "favorites", label: "Favorites" },
 ];
+
+interface FilterState {
+  type: Filter;
+  model: string;
+  project: string;
+  search: string;
+}
+
+const INITIAL_FILTERS: FilterState = { type: "all", model: "", project: "", search: "" };
 
 export default function LibraryPage() {
   return (
@@ -31,59 +40,127 @@ function LibraryStudio() {
   const [model, setModel] = useState("");
   const [project, setProject] = useState("");
   const [search, setSearch] = useState("");
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pagination cursor lives in a ref: it is written from fetch results and
+  // read by the "load more" handler, so it never drives renders or effects.
+  const cursorRef = useRef<string | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(
-    async (reset: boolean) => {
-      if (reset) setLoading(true);
-      else setLoadingMore(true);
-      setError(null);
-      try {
-        const params: Record<string, string> = { type: tab, limit: "24" };
-        if (model) params.model = model;
-        if (project) params.projectId = project;
-        if (search.trim()) params.search = search.trim();
-        if (!reset && cursor) params.cursor = cursor;
-        const res = await api.listGenerations(params);
-        setItems((prev) => (reset ? res.generations : [...prev, ...res.generations]));
-        setCursor(res.nextCursor);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [tab, model, project, search, cursor],
-  );
+  function paramsFor(f: FilterState, cursor?: string | null): Record<string, string> {
+    const params: Record<string, string> = { type: f.type, limit: "24" };
+    if (f.model) params.model = f.model;
+    if (f.project) params.projectId = f.project;
+    if (f.search.trim()) params.search = f.search.trim();
+    if (cursor) params.cursor = cursor;
+    return params;
+  }
 
+  // Mount: first page + catalog. State updates live inside .then callbacks,
+  // the same pattern as the dashboard — never synchronously in the body.
   useEffect(() => {
+    api
+      .listGenerations(paramsFor(INITIAL_FILTERS))
+      .then((res) => {
+        setItems(res.generations);
+        cursorRef.current = res.nextCursor;
+        setHasMore(res.nextCursor !== null);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "Failed to load");
+        setLoading(false);
+      });
     api.models().then((r) => setModels(r.models)).catch(() => {});
-    api.projects().then((r) => {
-      setProjects(r.projects);
-      const preset = searchParams.get("project");
-      if (preset && r.projects.some((p) => p.id === preset)) setProject(preset);
-    }).catch(() => {});
+    api
+      .projects()
+      .then((r) => {
+        setProjects(r.projects);
+        const preset = searchParams.get("project");
+        if (preset && r.projects.some((p) => p.id === preset)) {
+          setProject(preset);
+          api
+            .listGenerations(paramsFor({ ...INITIAL_FILTERS, project: preset }))
+            .then((res) => {
+              setItems(res.generations);
+              cursorRef.current = res.nextCursor;
+              setHasMore(res.nextCursor !== null);
+            })
+            .catch((e: unknown) =>
+              setError(e instanceof Error ? e.message : "Failed to load"),
+            );
+        }
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    setCursor(null);
-    void load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, model, project]);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setCursor(null);
-      void load(true);
+  // All refetches below run from event handlers (not effects): the filter
+  // snapshot travels explicitly, so no effect needs to mirror state.
+  function refresh(next: FilterState) {
+    setLoading(true);
+    api
+      .listGenerations(paramsFor(next))
+      .then((res) => {
+        setItems(res.generations);
+        cursorRef.current = res.nextCursor;
+        setHasMore(res.nextCursor !== null);
+        setError(null);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "Failed to load");
+        setLoading(false);
+      });
+  }
+
+  function selectTab(next: Filter) {
+    setTab(next);
+    refresh({ type: next, model, project, search });
+  }
+
+  function selectModel(next: string) {
+    setModel(next);
+    refresh({ type: tab, model: next, project, search });
+  }
+
+  function selectProject(next: string) {
+    setProject(next);
+    refresh({ type: tab, model, project: next, search });
+  }
+
+  function changeSearch(next: string) {
+    setSearch(next);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      refresh({ type: tab, model, project, search: next });
     }, 400);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }
+
+  function loadMore() {
+    if (!cursorRef.current || loadingMore) return;
+    setLoadingMore(true);
+    api
+      .listGenerations(paramsFor({ type: tab, model, project, search }, cursorRef.current))
+      .then((res) => {
+        setItems((prev) => [...prev, ...res.generations]);
+        cursorRef.current = res.nextCursor;
+        setHasMore(res.nextCursor !== null);
+        setLoadingMore(false);
+      })
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "Failed to load");
+        setLoadingMore(false);
+      });
+  }
 
   // Live-refresh in-flight generations every 5s.
   useEffect(() => {
@@ -120,7 +197,7 @@ function LibraryStudio() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             className={`rounded-full px-4 py-1.5 text-sm transition ${
               tab === t.id ? "bg-accent font-medium text-accent-ink" : "bg-panel-2 text-mute hover:text-ink"
             }`}
@@ -133,13 +210,13 @@ function LibraryStudio() {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => changeSearch(e.target.value)}
           placeholder="Search prompts…"
           className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none placeholder:text-faint focus:border-accent"
         />
         <select
           value={model}
-          onChange={(e) => setModel(e.target.value)}
+          onChange={(e) => selectModel(e.target.value)}
           className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">All models</option>
@@ -151,7 +228,7 @@ function LibraryStudio() {
         </select>
         <select
           value={project}
-          onChange={(e) => setProject(e.target.value)}
+          onChange={(e) => selectProject(e.target.value)}
           className="rounded-xl border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">All projects</option>
@@ -187,12 +264,12 @@ function LibraryStudio() {
               <GenerationCard key={g.id} generation={g} onChanged={(n) => handleChanged(n, g.id)} />
             ))}
           </div>
-          {cursor && (
+          {hasMore && (
             <div className="flex justify-center pt-2">
               <button
                 type="button"
                 disabled={loadingMore}
-                onClick={() => load(false)}
+                onClick={loadMore}
                 className="rounded-xl border border-edge bg-panel px-5 py-2.5 text-sm transition hover:border-faint disabled:opacity-50"
               >
                 {loadingMore ? "Loading…" : "Load more"}

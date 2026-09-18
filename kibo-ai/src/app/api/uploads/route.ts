@@ -37,7 +37,6 @@ export async function POST(request: Request) {
       .createSignedUploadUrl(path);
     if (error || !data) throw new Error(`Upload URL failed: ${error?.message ?? "unknown"}`);
 
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     // kibo-inputs is a PUBLIC bucket (unguessable UUID paths) so the provider
     // can fetch reference media. kibo-outputs stays private + signed URLs.
     const { data: pub } = db.storage.from(INPUTS_BUCKET).getPublicUrl(path);
