@@ -46,8 +46,9 @@ For the full setup sequence, see [the application README](./kibo-ai/README.md).
 
 Phase 1 is implemented: authentication, image/video generation, model
 selection, projects, library management, secure storage, generation polling,
-and cost estimates. The next phase focuses on brand profiles, prompt templates,
-deeper usage analysis, spend limits, and collaborative projects.
+and cost estimates. Phase 2 adds brand profiles, prompt templates, usage
+breakdowns, and monthly spending limits. Team projects, billing, prompt
+assistance, and additional providers remain planned.
 
 ## License
 

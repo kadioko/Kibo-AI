@@ -62,12 +62,18 @@ function httpError(status: number, message: string): Error {
 }
 
 async function updateRow(db: Db, id: string, userId: string, patch: Partial<GenerationRow>) {
-  const { error } = await db
+  const { data, error } = await db
     .from("generations")
     .update(patch)
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(`DB update failed: ${error.message}`);
+  // Updates against a deleted row are otherwise reported as a successful
+  // no-op by PostgREST. Detect that race before recording usage or returning
+  // a now-deleted generation to the client.
+  if (!data) throw httpError(404, "Generation not found");
 }
 
 export async function createGenerationRecord(
@@ -114,6 +120,7 @@ export async function createGenerationRecord(
       .from("prompt_templates")
       .select("id")
       .eq("id", body.templateId)
+      .or(`is_public.eq.true,user_id.eq.${userId}`)
       .maybeSingle();
     if (!template) throw new Error("Template not found");
   }
@@ -175,13 +182,21 @@ async function enforceSpendingLimit(db: Db, userId: string, estimateUsd: number)
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
-  const { data: logs } = await db
-    .from("usage_logs")
-    .select("cost_usd")
+  const { data: generations, error } = await db
+    .from("generations")
+    .select("estimated_cost,actual_cost")
     .eq("user_id", userId)
-    .gte("created_at", monthStart.toISOString());
-  const spent = ((logs ?? []) as Array<{ cost_usd: number }>).reduce(
-    (sum, r) => sum + Number(r.cost_usd),
+    .gte("created_at", monthStart.toISOString())
+    .in("status", ["queued", "processing", "completed"]);
+  if (error) throw new Error(`Spending limit check failed: ${error.message}`);
+  // Include active jobs so a user cannot queue many requests before the first
+  // completed job is written to usage_logs. Completed rows use actual cost
+  // where available; active rows reserve their estimate.
+  const spent = ((generations ?? []) as Array<{
+    estimated_cost: number | null;
+    actual_cost: number | null;
+  }>).reduce(
+    (sum, r) => sum + Number(r.actual_cost ?? r.estimated_cost ?? 0),
     0,
   );
   if (spent + estimateUsd > Number(cap)) {
@@ -282,21 +297,18 @@ export async function refreshGenerationRecord(
     completed_at: new Date().toISOString(),
     error: null,
   });
-  const { data: logged } = await db
-    .from("usage_logs")
-    .select("id")
-    .eq("generation_id", row.id)
-    .maybeSingle();
-  if (!logged) {
-    await db.from("usage_logs").insert({
+  const { error: usageError } = await db.from("usage_logs").upsert(
+    {
       user_id: userId,
       generation_id: row.id,
       provider: row.provider,
       model: row.model,
       project_id: row.project_id,
       cost_usd: row.estimated_cost ?? 0,
-    });
-  }
+    },
+    { onConflict: "generation_id", ignoreDuplicates: true },
+  );
+  if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
 
   const { data: fresh } = await db
     .from("generations")
@@ -342,12 +354,16 @@ async function copyOutputsToStorage(
         .from(OUTPUTS_BUCKET)
         .upload(storagePath, buffer, { contentType, upsert: true });
       if (error) throw new Error(`Storage upload failed: ${error.message}`);
-      await db.from("generation_assets").insert({
-        generation_id: row.id,
-        user_id: row.user_id,
-        storage_path: storagePath,
-        mime_type: contentType,
-      });
+      const { error: assetError } = await db.from("generation_assets").upsert(
+        {
+          generation_id: row.id,
+          user_id: row.user_id,
+          storage_path: storagePath,
+          mime_type: contentType,
+        },
+        { onConflict: "generation_id,storage_path", ignoreDuplicates: true },
+      );
+      if (assetError) throw new Error(`Asset record failed: ${assetError.message}`);
       stored.push({ storagePath, mimeType: contentType });
     } finally {
       clearTimeout(timeout);

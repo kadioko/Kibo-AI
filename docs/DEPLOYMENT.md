@@ -6,8 +6,8 @@ Supabase as the backend.
 ## 1. Create and configure Supabase
 
 1. Create a Supabase project.
-2. In the SQL Editor, run
-   `kibo-ai/supabase/migrations/0001_kibo_init.sql`.
+2. In the SQL Editor, run every migration in `kibo-ai/supabase/migrations/`
+   in numeric order.
 3. In **Storage**, create these buckets:
    - `kibo-inputs` — public; used for provider-accessible reference uploads.
    - `kibo-outputs` — private; used for completed image and video files.

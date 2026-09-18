@@ -27,6 +27,8 @@ credentials. Do not commit `.env.local` or any API credentials.
    - `supabase/migrations/0001_kibo_init.sql` (tables, RLS, provider seed)
    - `supabase/migrations/0002_phase2.sql` (brand/template links, spending
      limits, public template seeds)
+   - `supabase/migrations/0003_integrity_and_template_rls.sql` (template
+     access control and generation record integrity)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).

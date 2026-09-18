@@ -10,7 +10,15 @@ import { redirect } from "next/navigation";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/dashboard";
+  const requestedNext = url.searchParams.get("next");
+  // Accept only application-relative destinations. This endpoint is reached
+  // from emailed links, so reflecting an arbitrary URL would create an open
+  // redirect after a successful sign-in or recovery flow.
+  const candidate = requestedNext ? new URL(requestedNext, url.origin) : null;
+  const next =
+    requestedNext?.startsWith("/") && candidate?.origin === url.origin
+      ? `${candidate.pathname}${candidate.search}${candidate.hash}`
+      : "/dashboard";
 
   if (code) {
     const cookieStore = await cookies();
