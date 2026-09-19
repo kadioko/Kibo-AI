@@ -38,6 +38,8 @@ credentials. Do not commit `.env.local` or any API credentials.
      append-only administrator audit log)
    - `supabase/migrations/0007_admin_service_role_grants.sql` (server-only
      privileges for the protected administrator tables)
+   - `supabase/migrations/0008_runtime_table_privileges.sql` (minimum
+     dashboard/admin read grants; RLS still enforces user access)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).

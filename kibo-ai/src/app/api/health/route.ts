@@ -37,7 +37,7 @@ export async function GET() {
       ok: missing.length === 0,
       detail:
         missing.length === 0
-          ? "0001–0007 applied."
+          ? "0001–0008 applied."
           : `Missing tables: ${missing.join(", ")} — run the migrations in order.`,
     });
 
