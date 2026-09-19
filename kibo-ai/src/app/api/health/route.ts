@@ -26,7 +26,7 @@ export async function GET() {
       detail: "Authenticated service query path.",
     });
 
-    const tables = ["providers", "generations", "brand_profiles", "prompt_templates", "teams", "credit_ledger", "team_credit_ledger"];
+    const tables = ["providers", "generations", "brand_profiles", "prompt_templates", "teams", "credit_ledger", "team_credit_ledger", "app_admins", "admin_audit_log"];
     const missing: string[] = [];
     for (const table of tables) {
       const { error } = await db.from(table).select("id", { count: "exact", head: true });
@@ -37,7 +37,7 @@ export async function GET() {
       ok: missing.length === 0,
       detail:
         missing.length === 0
-          ? "0001–0005 applied."
+          ? "0001–0007 applied."
           : `Missing tables: ${missing.join(", ")} — run the migrations in order.`,
     });
 

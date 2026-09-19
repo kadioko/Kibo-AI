@@ -4,6 +4,7 @@
  */
 import { createServiceClient } from "../supabase/server";
 import { getBilling } from "../billing/ledger";
+import { isAppAdmin } from "../admin";
 import { getProvider, isProviderId } from "../providers";
 import type { GenerationStatusValue } from "../providers/types";
 import { estimateModelCost, getModel, parseSettings } from "../models/registry";
@@ -178,6 +179,7 @@ export async function createGenerationRecord(
   const provider = getProvider(body.provider);
 
   const db = await createServiceClient();
+  const admin = await isAppAdmin(userId);
   let fundingTeamId: string | null = null;
   if (body.projectId) {
     const project = await loadProjectForUse(db, userId, body.projectId);
@@ -203,9 +205,9 @@ export async function createGenerationRecord(
     if (!template) throw new Error("Template not found");
   }
 
-  await enforceSpendingLimit(db, userId, estimate.amountUsd);
+  if (!admin) await enforceSpendingLimit(db, userId, estimate.amountUsd);
   // Funding wallet: team project → team wallet, else personal credits.
-  if (fundingTeamId) {
+  if (fundingTeamId && !admin) {
     await getBilling().checkTeamSufficient(fundingTeamId, estimate.amountUsd);
   } else {
     // Prepaid credits gate the submit; the ledger is debited at completion.
@@ -395,7 +397,7 @@ export async function refreshGenerationRecord(
     if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
     // Debit the snapshotted funding wallet. Failed generations never reach
     // here, so like the provider, Kibo AI only bills completed work.
-    if (row.team_id) {
+    if (row.team_id && !(await isAppAdmin(row.user_id))) {
       await getBilling().spendTeam(row.team_id, row.id, row.estimated_cost ?? 0);
     } else {
       await getBilling().spend(row.user_id, row.id, row.estimated_cost ?? 0);

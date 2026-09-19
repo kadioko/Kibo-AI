@@ -34,6 +34,10 @@ credentials. Do not commit `.env.local` or any API credentials.
      team wallet ledger)
    - `supabase/migrations/0005_hardening.sql` (template and team-project
      access control, idempotency constraints, migration-version repair)
+   - `supabase/migrations/0006_app_admins.sql` (global administrators and
+     append-only administrator audit log)
+   - `supabase/migrations/0007_admin_service_role_grants.sql` (server-only
+     privileges for the protected administrator tables)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).
@@ -106,6 +110,16 @@ src/
   proxy.ts          session refresh + auth redirects
 supabase/migrations/  Postgres schema + RLS
 ```
+
+## Administrator operations
+
+Global administrators are recorded in `app_admins`, which is separate from
+team owner/admin roles. The `/admin` console is server-enforced, lists recent
+queue activity, and can grant support credits through an audit-logged API.
+Administrators are complimentary at Kibo's ledger layer, but provider usage
+continues to be tracked and generation rate limits remain enabled to protect
+the service. Grant this role only through a server-side Supabase Admin API or
+a controlled migration; never expose a service-role key to the browser.
 
 ## Scripts
 

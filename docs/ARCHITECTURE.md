@@ -24,12 +24,13 @@ server-side provider code.
 
 | Area | Location | Responsibility |
 | --- | --- | --- |
-| Application pages | `kibo-ai/src/app/(app)` | Dashboard, Create, Library, projects, brands, templates, usage, teams, models, and settings. |
+| Application pages | `kibo-ai/src/app/(app)` | Dashboard, Create, Library, projects, brands, templates, usage, teams, models, settings, and protected admin operations. |
 | API routes | `kibo-ai/src/app/api` | Authenticated generation, workspace, billing, assistant, team, diagnostics, and webhook endpoints. |
 | Model registry | `kibo-ai/src/lib/models/registry.ts` | Source of truth for supported models, capabilities, settings, endpoints, and local cost estimates. |
 | Provider interface | `kibo-ai/src/lib/providers` | Provider abstraction and Higgsfield implementation. |
 | Generation service | `kibo-ai/src/lib/generations/service.ts` | Job creation, status refresh, storage copy, signed URLs, and usage logging. |
 | Billing ledger | `kibo-ai/src/lib/billing` | Personal credits, team-wallet funding, generation debits, and Stripe checkout/webhook support. |
+| Admin controls | `kibo-ai/src/lib/admin.ts` | Server-side global-admin authorization, operations overview, and audit-log writes. |
 | Prompt assistant | `kibo-ai/src/lib/assistant` | Rule-based prompt improvement with an optional OpenAI-compatible backend. |
 | Supabase clients | `kibo-ai/src/lib/supabase` | Browser, server, and privileged service-role clients. |
 | Database schema | `kibo-ai/supabase/migrations` | Ordered schema, RLS, team, billing, and hardening migrations. |
@@ -61,6 +62,7 @@ level security. Core relationships are:
 
 ```text
 auth.users
+  |-- app_admins --< admin_audit_log
   |-- projects
   |-- generations --< generation_assets
   |                `-- favorites
@@ -88,5 +90,9 @@ security and service-layer authorization checks.
   away from protected application routes.
 - A team project may use a team wallet only while the submitting user is a
   current member of that team; the generation snapshots its funding team.
+- Global administrators are separate from team roles. Their API routes call
+  `requireAdmin()` with a privileged database lookup; neither client RLS nor
+  sidebar visibility is treated as authorization. Administrative credit grants
+  append an audit record.
 - Stripe webhooks are signature-verified. Higgsfield webhooks use a configured
   Bearer secret and only accelerate the normal polling lifecycle.

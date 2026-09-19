@@ -1,4 +1,5 @@
 import { createServiceClient } from "../supabase/server";
+import { isAppAdmin } from "../admin";
 import type { Billing, CreditSummary, LedgerEntry } from "./types";
 
 type Db = Awaited<ReturnType<typeof createServiceClient>>;
@@ -88,6 +89,10 @@ export function createLedgerBilling(): Billing {
     },
 
     async checkSufficient(userId: string, estimateUsd: number): Promise<void> {
+      // App administrators are comped at the Kibo ledger layer. Provider
+      // usage remains recorded separately, and the submission rate limit is
+      // still enforced by the generation route.
+      if (await isAppAdmin(userId)) return;
       const summary = await this.balance(userId);
       if (summary.balance < estimateUsd) {
         throw httpError(
@@ -99,6 +104,7 @@ export function createLedgerBilling(): Billing {
 
     async spend(userId: string, generationId: string | null, amountUsd: number): Promise<void> {
       if (!(amountUsd > 0)) return;
+      if (await isAppAdmin(userId)) return;
       const db = await createServiceClient();
       const { error } = await db.from("credit_ledger").insert({
         user_id: userId,

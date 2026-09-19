@@ -20,6 +20,8 @@ export async function GET() {
       countHeads().in("status", ["queued", "processing"]),
     ]);
 
+    const failures = [month.error, images.error, videos.error, spend.error, active.error].filter(Boolean);
+    if (failures.length > 0) throw new Error(failures[0]!.message);
     const totalSpend = ((spend.data ?? []) as Array<{ cost_usd: number }>).reduce(
       (sum, r) => sum + Number(r.cost_usd),
       0,

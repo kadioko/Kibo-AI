@@ -18,13 +18,21 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
-export function AppShell({ email, children }: { email?: string; children: React.ReactNode }) {
+export function AppShell({
+  email,
+  isAdmin = false,
+  children,
+}: {
+  email?: string;
+  isAdmin?: boolean;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const nav = (
     <nav className="space-y-1">
-      {NAV.map((item) => {
+      {[...NAV, ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: "⌘" }] : [])].map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link

@@ -35,6 +35,7 @@ JSON in the shape `{ "error": "message" }`; validation failures may include an
 | `/api/teams/:id/wallet` | `GET` | Team wallet balance and ledger entries. |
 | `/api/teams/:id/fund` | `POST` | Move personal credits into a team wallet. |
 | `/api/health` | `GET` | Authenticated, secret-safe deployment diagnostics. |
+| `/api/admin/credits` | `POST` | Global-admin-only, audited support-credit grant. |
 
 ## Webhooks
 

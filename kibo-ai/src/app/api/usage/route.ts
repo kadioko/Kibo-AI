@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     monthStart.setHours(0, 0, 0, 0);
     const supabase = await createClient();
 
-    const [{ data, error }, { data: projects }, { data: monthLogs }, { data: limit }] =
+    const [{ data, error }, { data: projects, error: projectsError }, { data: monthLogs, error: monthLogsError }, { data: limit, error: limitError }] =
       await Promise.all([
         supabase
           .from("usage_logs")
@@ -35,6 +35,9 @@ export async function GET(request: Request) {
           .maybeSingle(),
       ]);
     if (error) throw new Error(error.message);
+    if (projectsError) throw new Error(projectsError.message);
+    if (monthLogsError) throw new Error(monthLogsError.message);
+    if (limitError) throw new Error(limitError.message);
     const rows = (data ?? []) as Array<{
       cost_usd: number;
       model: string;

@@ -18,6 +18,8 @@ OpenAI-compatible prompt assistant.
   time-limited URLs.
 - Organize work into projects and mark useful generations as favorites.
 - Share projects with teams, manage pooled team wallets, and invite members.
+- Operate the studio with a protected global-admin console and auditable
+  support-credit grants.
 - Improve prompts with a built-in assistant or an optional LLM backend.
 - Test the full generation lifecycle without provider spend using the mock
   provider.
