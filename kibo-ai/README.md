@@ -40,6 +40,10 @@ credentials. Do not commit `.env.local` or any API credentials.
      privileges for the protected administrator tables)
    - `supabase/migrations/0008_runtime_table_privileges.sql` (minimum
      dashboard/admin read grants; RLS still enforces user access)
+   - `supabase/migrations/0009_service_runtime_privileges.sql` (server-only
+     privileges for generations, diagnostics, storage jobs, and billing)
+   - `supabase/migrations/0010_model_favorites.sql` (per-user model
+     favorites with row-level access control)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).

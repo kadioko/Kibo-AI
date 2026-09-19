@@ -6,19 +6,44 @@ import { api, type ApiModel } from "@/lib/api";
 
 export default function ModelsPage() {
   const [models, setModels] = useState<ApiModel[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [tab, setTab] = useState<"all" | "image" | "video">("all");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.models().then((r) => setModels(r.models)).catch((e) => setError(e.message));
+    Promise.all([api.models(), api.modelFavorites()])
+      .then(([catalog, favorites]) => {
+        setModels(catalog.models);
+        setFavoriteIds(new Set(favorites.modelIds));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load models."));
   }, []);
 
   const list = models.filter(
     (m) =>
       (tab === "all" || m.generationType === tab) &&
       (!query.trim() || `${m.label} ${m.blurb}`.toLowerCase().includes(query.trim().toLowerCase())),
-  );
+  ).sort((a, b) => Number(favoriteIds.has(b.id)) - Number(favoriteIds.has(a.id)) || a.label.localeCompare(b.label));
+
+  async function toggleFavorite(modelId: string) {
+    setUpdatingId(modelId);
+    setError(null);
+    try {
+      const { isFavorite } = await api.toggleModelFavorite(modelId);
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (isFavorite) next.add(modelId);
+        else next.delete(modelId);
+        return next;
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update favorite.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -59,9 +84,21 @@ export default function ModelsPage() {
           <div key={m.id} className="flex flex-col rounded-2xl border border-edge bg-panel p-4">
             <div className="flex items-start justify-between gap-2">
               <p className="font-semibold">{m.label}</p>
-              <span className="shrink-0 rounded-full bg-panel-2 px-2 py-0.5 text-[11px] uppercase tracking-wide text-mute">
-                {m.generationType}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void toggleFavorite(m.id)}
+                  disabled={updatingId === m.id}
+                  aria-label={favoriteIds.has(m.id) ? `Remove ${m.label} from favorites` : `Add ${m.label} to favorites`}
+                  aria-pressed={favoriteIds.has(m.id)}
+                  className={`rounded-lg px-2 py-0.5 text-sm transition disabled:opacity-50 ${favoriteIds.has(m.id) ? "bg-accent text-accent-ink" : "bg-panel-2 text-mute hover:text-ink"}`}
+                >
+                  {favoriteIds.has(m.id) ? "★" : "☆"}
+                </button>
+                <span className="shrink-0 rounded-full bg-panel-2 px-2 py-0.5 text-[11px] uppercase tracking-wide text-mute">
+                  {m.generationType}
+                </span>
+              </div>
             </div>
             <p className="mt-1 flex-1 text-sm text-mute">{m.blurb}</p>
             <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-faint">

@@ -151,6 +151,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   models: () => request<{ models: ApiModel[] }>("/api/models"),
+  modelFavorites: () => request<{ modelIds: string[] }>("/api/models/favorites"),
+  toggleModelFavorite: (modelId: string) =>
+    request<{ isFavorite: boolean }>("/api/models/favorites", {
+      method: "POST",
+      body: JSON.stringify({ modelId }),
+    }),
   estimate: (body: unknown) =>
     request<{ estimate: { amountUsd: number; currency: string; breakdown?: string } }>(
       "/api/generations/estimate",
