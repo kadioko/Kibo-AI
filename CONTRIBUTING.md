@@ -7,7 +7,8 @@ all Node commands from that directory.
 
 1. Install Node.js 20.9 or later.
 2. Copy `.env.example` to `.env.local` and configure Supabase and Higgsfield.
-3. Run the initial Supabase migration and create the required storage buckets.
+3. Run every migration in `supabase/migrations/` in filename order, and create
+   the required storage buckets. Do not run migrations selectively.
 4. Install dependencies and start the development server:
 
    ```bash
@@ -21,6 +22,7 @@ all Node commands from that directory.
 ```bash
 cd kibo-ai
 npm run lint
+npm test
 npm run build
 ```
 
@@ -41,6 +43,10 @@ formatting, feature, and dependency changes.
 - Keep outputs private and serialize them through signed URLs.
 - Add a Supabase migration for schema changes; do not edit an applied
   migration in a deployed environment.
+- Use the mock provider for generation-flow tests where provider credentials
+  or paid model calls are unnecessary.
+- Treat credit and team-wallet mutations as idempotent: one generation may
+  create at most one usage record and one wallet debit.
 
 ## Secrets and generated files
 

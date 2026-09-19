@@ -1,4 +1,7 @@
-# open-higgsfield Analysis for FramePilot
+# open-higgsfield Reference Analysis for Kibo AI
+
+> Historical implementation research. This document describes the external
+> reference repository, not the current Kibo AI codebase or feature set.
 
 ## Repository Overview
 
@@ -68,7 +71,7 @@ User submits → assemblePlane() → toPlatform() → submitGeneration() (server
 - Settings popover system (enum/range/boolean)
 - Model picker with search & descriptions
 
-### ⚠️ Must Rewrite for FramePilot
+### ⚠️ Rewritten for Kibo AI
 - **No user authentication** - Single device, IndexedDB only
 - **No database** - All history in browser IndexedDB (60 record cap)
 - **No project/brand/template system**

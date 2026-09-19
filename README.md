@@ -5,7 +5,8 @@ frontier models available through the Higgsfield API. It gives each user a
 private workspace for creating, organizing, and tracking AI-generated media.
 
 The application lives in [`kibo-ai/`](./kibo-ai). It is built with Next.js,
-TypeScript, Supabase, and Higgsfield.
+TypeScript, Supabase, Higgsfield, and optional Stripe, Upstash Redis, and an
+OpenAI-compatible prompt assistant.
 
 ## What it does
 
@@ -16,6 +17,10 @@ TypeScript, Supabase, and Higgsfield.
 - Keep generated outputs private in Supabase Storage and serve them with
   time-limited URLs.
 - Organize work into projects and mark useful generations as favorites.
+- Share projects with teams, manage pooled team wallets, and invite members.
+- Improve prompts with a built-in assistant or an optional LLM backend.
+- Test the full generation lifecycle without provider spend using the mock
+  provider.
 
 ## Quick start
 
@@ -37,6 +42,7 @@ For the full setup sequence, see [the application README](./kibo-ai/README.md).
 ## Documentation
 
 - [Architecture](./docs/ARCHITECTURE.md) — components, data flow, and security model.
+- [API guide](./docs/API.md) — authenticated routes, webhooks, and operational endpoints.
 - [Deployment](./docs/DEPLOYMENT.md) — Supabase and Vercel setup.
 - [Contributing](./CONTRIBUTING.md) — local workflow and pull-request guidance.
 - [Security](./SECURITY.md) — reporting process and deployment considerations.
@@ -44,11 +50,10 @@ For the full setup sequence, see [the application README](./kibo-ai/README.md).
 
 ## Status
 
-Phase 1 is implemented: authentication, image/video generation, model
-selection, projects, library management, secure storage, generation polling,
-and cost estimates. Phase 2 adds brand profiles, prompt templates, usage
-breakdowns, and monthly spending limits. Team projects, billing, prompt
-assistance, and additional providers remain planned.
+Phases 1–3 are implemented: generation workflows, brands and templates,
+spending controls, prompt assistance, teams, prepaid credits, Stripe top-up
+integration, webhooks, a mock provider, and automated tests. See
+[PLAN.md](./PLAN.md) for current scope and operational caveats.
 
 ## License
 

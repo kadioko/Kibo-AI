@@ -31,6 +31,12 @@ Variables**.
 | `HIGGSFIELD_API_KEY_SECRET` | Yes | Higgsfield API credential secret. |
 | `HIGGSFIELD_API_BASE_URL` | No | Defaults to `https://api.higgsfield.ai`. |
 | `NEXT_PUBLIC_APP_URL` | Yes | The canonical app URL, used for password-reset links. |
+| `MOCK_PROVIDER_ENABLED` | No | Set `true` for no-cost end-to-end verification. |
+| `WELCOME_CREDITS_USD` | No | New-user credit grant; defaults to `5`. |
+| `ASSISTANT_API_URL`, `ASSISTANT_API_KEY`, `ASSISTANT_MODEL` | No | Enables an OpenAI-compatible prompt assistant. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | No | Enables distributed rate limiting; otherwise the app uses in-memory limits. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | No | Enables Stripe credit top-ups and verified Stripe webhooks. |
+| `HIGGSFIELD_WEBHOOK_SECRET` | No | Protects the optional Higgsfield completion webhook. |
 
 ## 3. Deploy to Vercel
 
@@ -57,14 +63,23 @@ directory, add the environment variables, and deploy from the Vercel UI.
   signed rather than a permanent storage URL.
 - Request a password reset and verify the email link returns to the deployed
   domain.
+- Open **Settings → Diagnostics** and confirm the database, storage, provider,
+  and rate-limiter checks match the intended deployment.
+- If Stripe is enabled, complete a test-mode top-up and verify the webhook adds
+  a single ledger credit.
 
 ## Operational notes
 
-Generation status is refreshed when the client polls the generation endpoint;
-there is no provider webhook worker in the current release. Long-running jobs
-therefore become terminal when the user returns to the relevant screen or when
-the client continues polling.
+Generation status is refreshed when the client polls the generation endpoint.
+The optional Higgsfield webhook can accelerate finalization, but polling remains
+the reliable completion path. Long-running jobs therefore become terminal when
+the client returns to the relevant screen or continues polling.
 
 Cost estimates are configured in the local model registry. Review
 `src/lib/models/registry.ts` whenever provider pricing or model endpoints
 change.
+
+For a no-cost deployment smoke test, set `MOCK_PROVIDER_ENABLED=true`, create
+an account, select **Mock Image** on Create, and wait for the generated test
+asset to appear in Library. Disable the mock provider in production unless it
+is deliberately available to users.

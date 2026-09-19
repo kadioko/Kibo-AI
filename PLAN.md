@@ -5,7 +5,7 @@
 **Repo:** `wide-trace/open-higgsfield` (single-page studio, Next.js 16, Zustand,
 Vercel Blob, IndexedDB). **License: none found** — no LICENSE file in the
 repo, so no source was copied. Kibo AI is an original implementation inspired
-by its patterns. Full notes in `../ANALYSIS.md`.
+by its patterns. Full notes in [ANALYSIS.md](./ANALYSIS.md).
 
 ## 2. What was reused (patterns, not code)
 
@@ -24,12 +24,13 @@ isolation · plus cost tracking, projects, favorites, usage analytics.
 
 ## 4. Folder structure — see `kibo-ai/README.md` (built as documented).
 
-## 5. Database schema — `kibo-ai/supabase/migrations/0001_kibo_init.sql`
+## 5. Database schema
 
 providers · models · projects · generations (all spec fields incl.
 estimated/actual cost, provider_request_id, error, output/thumbnail URLs) ·
 generation_assets · favorites · brand_profiles · prompt_templates ·
-usage_logs. RLS: user-owned rows only; public read on catalog tables.
+usage_logs. Later migrations add team membership, project sharing, personal
+and team credit ledgers, completion idempotency constraints, and hardened RLS.
 
 ## 6. Phase status
 
@@ -62,11 +63,23 @@ usage_logs. RLS: user-owned rows only; public read on catalog tables.
   finalize idempotency (usage + assets), storage cleanup on delete,
   StrictMode double-submit guard, 10/15-min polling deadlines,
   fixed a REAL upsert-without-constraint crash in usage logging, boolean
-  defaults, 4-decimal money precision.
+  defaults, 4-decimal money precision, stale team-wallet assignments, and
+  duplicate migration-version handling.
 
-## 7. To run it
+## 7. Current operational scope
 
-Supabase project → run migrations 0001 + 0002 + 0003 → create
+- Team members can create shared projects and fund a pooled team wallet from
+  their personal credits.
+- Credits are checked before submit and debited only after a completed output
+  is recorded. Stripe checkout is optional and requires webhook configuration.
+- The mock provider supports no-cost local end-to-end verification.
+- Client polling remains the reliable completion mechanism; Higgsfield webhooks
+  are an optional accelerator, not a replacement for polling.
+
+## 8. To run it
+
+Supabase project → run migrations 0001 + 0002 + 0003_phase3 + 0004 + 0005
+in filename order → create
 `kibo-inputs` (public) + `kibo-outputs` (private) buckets → allow-list
 `/auth/confirm` in Supabase URL config → Higgsfield key → `.env.local`
 → `npm run dev` (+ `npm test`). Details in `kibo-ai/README.md`.

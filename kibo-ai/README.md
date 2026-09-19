@@ -6,7 +6,8 @@ Supabase (Auth, Postgres, Storage) · Vercel.
 
 Repository-level documentation is available in the parent directory:
 [architecture](../docs/ARCHITECTURE.md), [deployment](../docs/DEPLOYMENT.md),
-[contributing](../CONTRIBUTING.md), and [security](../SECURITY.md).
+[API reference](../docs/API.md), [contributing](../CONTRIBUTING.md), and
+[security](../SECURITY.md).
 
 ## Quick start
 
@@ -28,11 +29,11 @@ credentials. Do not commit `.env.local` or any API credentials.
    - `supabase/migrations/0002_phase2.sql` (brand/template links, spending
      limits, public template seeds)
    - `supabase/migrations/0003_phase3.sql` (teams, invites, project sharing,
-     credits ledger)
+     personal credits ledger)
    - `supabase/migrations/0004_team_wallets.sql` (generation team snapshot,
      team wallet ledger)
-   - `supabase/migrations/0003_integrity_and_template_rls.sql` (template
-     access control and generation record integrity)
+   - `supabase/migrations/0005_hardening.sql` (template and team-project
+     access control, idempotency constraints, migration-version repair)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).
@@ -52,6 +53,12 @@ credentials. Do not commit `.env.local` or any API credentials.
 | `HIGGSFIELD_API_KEY_ID` | console.higgsfield.ai | Provider auth (server-only) |
 | `HIGGSFIELD_API_KEY_SECRET` | console.higgsfield.ai | Provider auth (server-only) |
 | `HIGGSFIELD_API_BASE_URL` | — | Default `https://api.higgsfield.ai` |
+| `HIGGSFIELD_WEBHOOK_SECRET` | — | Optional Bearer secret for the Higgsfield webhook |
+| `MOCK_PROVIDER_ENABLED` | — | Set `true` for no-cost end-to-end testing |
+| `WELCOME_CREDITS_USD` | — | Optional new-user credit grant; defaults to `5` |
+| `ASSISTANT_API_URL`, `ASSISTANT_API_KEY`, `ASSISTANT_MODEL` | — | Optional OpenAI-compatible prompt assistant |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | — | Optional distributed rate limiter |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | — | Optional Stripe credit top-ups and verified webhook |
 | `NEXT_PUBLIC_APP_URL` | — | Used for password-reset links |
 
 Higgsfield credentials never reach the browser: all provider calls go through
@@ -70,10 +77,12 @@ to Supabase Authentication's Site URL and redirect allow-list.
 ## Generation flow
 
 ```
-Create screen → POST /api/generations → validate (zod) → rate limit
-  → provider.createGeneration() → insert `generations` row (queued)
+Create screen → POST /api/generations → validate (zod) → rate limit →
+  personal/team credit check → provider.createGeneration() → insert
+  `generations` row (queued)
   → client polls GET /api/generations/[id] every 4s
-  → terminal? completed → download CDN file → kibo-outputs → usage_logs
+  → terminal? completed → download CDN file → kibo-outputs → usage log →
+  idempotent personal/team wallet debit
 ```
 
 ## Project layout
@@ -82,14 +91,17 @@ Create screen → POST /api/generations → validate (zod) → rate limit
 src/
   app/
     (app)/          dashboard, create, library, projects, models,
-                    usage, templates, brands, settings
-    api/            generations, models, projects, stats, usage, uploads
+                    usage, templates, brands, teams, settings
+    api/            generation, workspace, assistant, billing, team, health,
+                    and webhook routes
     login/          sign in / sign up / password reset
   components/       app-shell, generation-card
   lib/
     providers/      GenerationProvider interface + higgsfield.ts + registry
     models/         schema-driven model catalog (source of UI truth)
     generations/    validation (zod) + service (DB + provider + storage)
+    billing/        personal and team credit ledgers + Stripe integration
+    assistant/      rule-based and OpenAI-compatible prompt improvement
     supabase/       browser / server / service clients
   proxy.ts          session refresh + auth redirects
 supabase/migrations/  Postgres schema + RLS
@@ -138,5 +150,7 @@ supabase/migrations/  Postgres schema + RLS
 | Login redirects repeatedly | Confirm the Supabase URL and anonymous key, and add the local/deployed URL to the Supabase Auth redirect allow-list. |
 | Upload fails | Confirm `kibo-inputs` exists and is public, and that the selected media type is JPEG, PNG, WebP, GIF, MP4, WAV, or MPEG audio. |
 | Generation submit fails | Confirm both Higgsfield credentials are present on the server and that the model endpoint is available to the Higgsfield account. |
+| Credit balance blocks a generation | Fund personal credits through Stripe when configured, or use the mock provider for no-cost verification. Team-project generations require a current team membership and a funded team wallet. |
 | Generation never completes | The current app refreshes provider status while the client polls. Return to the Library or generation screen and inspect the stored provider error. |
 | Output does not display | Confirm `kibo-outputs` exists and is private; the app creates a fresh signed URL when it serializes a generation. |
+| A production check fails | Open Settings → Diagnostics. It reports migration, bucket, provider, assistant, and rate-limiter configuration without exposing secrets. |

@@ -141,14 +141,16 @@ export async function loadProjectForUse(
     .single();
   if (!data) return null;
   const project = data as AccessibleProject;
-  if (project.user_id === userId) return project;
-  if (!project.team_id) return null;
+  if (!project.team_id) return project.user_id === userId ? project : null;
   const { data: membership } = await db
     .from("team_members")
     .select("role")
     .eq("team_id", project.team_id)
     .eq("user_id", userId)
     .maybeSingle();
+  // A team assignment always requires current membership, including when the
+  // caller originally created the project. This prevents a former member (or
+  // an owner with a stale assignment) from charging a team wallet.
   return membership ? project : null;
 }
 
