@@ -26,11 +26,22 @@ export async function GET() {
       detail: "Authenticated service query path.",
     });
 
-    const tables = ["providers", "generations", "brand_profiles", "prompt_templates", "teams", "credit_ledger", "team_credit_ledger", "app_admins", "admin_audit_log"];
+    const tables = [
+      { name: "providers", column: "id" },
+      { name: "generations", column: "id" },
+      { name: "brand_profiles", column: "id" },
+      { name: "prompt_templates", column: "id" },
+      { name: "teams", column: "id" },
+      { name: "credit_ledger", column: "id" },
+      { name: "team_credit_ledger", column: "id" },
+      { name: "app_admins", column: "user_id" },
+      { name: "admin_audit_log", column: "id" },
+      { name: "model_favorites", column: "model_id" },
+    ];
     const missing: string[] = [];
     for (const table of tables) {
-      const { error } = await db.from(table).select("id", { count: "exact", head: true });
-      if (error) missing.push(table);
+      const { error } = await db.from(table.name).select(table.column, { count: "exact", head: true });
+      if (error) missing.push(table.name);
     }
     checks.push({
       name: "Database migrations",
