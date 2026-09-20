@@ -21,14 +21,17 @@ export async function GET() {
         supabase.from("team_members").select("team_id,user_id,role").in("team_id", teamIds),
         supabase.from("team_invites").select("id,team_id,email,created_at").in("team_id", teamIds),
       ]);
+      if (m.error) throw new Error(`Team members query failed: ${m.error.message}`);
+      if (i.error) throw new Error(`Team invites query failed: ${i.error.message}`);
       members = (m.data ?? []) as typeof members;
       invites = (i.data ?? []) as typeof invites;
     }
     // Invites addressed to me in teams I cannot see yet.
-    const { data: mine } = await supabase
+    const { data: mine, error: mineError } = await supabase
       .from("team_invites")
       .select("id,team_id,email,created_at,teams(id,name)")
       .is("accepted_at", null);
+    if (mineError) throw new Error(`Pending invites query failed: ${mineError.message}`);
 
     return NextResponse.json({
       me: user.id,
@@ -64,7 +67,12 @@ export async function POST(request: Request) {
     const { error: memberError } = await supabase
       .from("team_members")
       .insert({ team_id: (team as { id: string }).id, user_id: user.id, role: "owner" });
-    if (memberError) throw new Error(memberError.message);
+    if (memberError) {
+      // Avoid leaving an unusable team behind when the owner-membership row
+      // cannot be created.
+      await supabase.from("teams").delete().eq("id", (team as { id: string }).id);
+      throw new Error(memberError.message);
+    }
     return NextResponse.json({ team }, { status: 201 });
   } catch (error) {
     const { status, message } = toHttpError(error);

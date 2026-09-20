@@ -49,4 +49,14 @@ describe("mock provider", () => {
     const status = await provider.getGenerationStatus("mock_nope");
     expect(status.status).toBe("failed");
   });
+
+  it("finishes portable jobs after a serverless instance change", async () => {
+    const provider = createMockProvider();
+    const createdAt = (Date.now() - 2_000).toString(36);
+    const status = await provider.getGenerationStatus(
+      `mock_image_${createdAt}_00000000-0000-4000-8000-000000000000`,
+    );
+    expect(status.status).toBe("completed");
+    expect(status.outputUrls[0]).toContain("picsum.photos");
+  });
 });

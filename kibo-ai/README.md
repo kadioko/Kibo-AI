@@ -44,6 +44,10 @@ credentials. Do not commit `.env.local` or any API credentials.
      privileges for generations, diagnostics, storage jobs, and billing)
    - `supabase/migrations/0010_model_favorites.sql` (per-user model
      favorites with row-level access control)
+   - `supabase/migrations/0011_feature_runtime_privileges.sql` (complete
+     browser and server privileges while retaining row-level access control)
+   - `supabase/migrations/0012_billing_idempotency.sql` (prevents duplicate
+     credit grants when Stripe retries a webhook)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).

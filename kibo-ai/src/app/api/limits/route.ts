@@ -7,11 +7,12 @@ export async function GET() {
   try {
     const user = await requireUser();
     const supabase = await createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("spending_limits")
       .select("monthly_limit_usd")
       .eq("user_id", user.id)
       .maybeSingle();
+    if (error) throw new Error(`Spending limit query failed: ${error.message}`);
     return NextResponse.json({
       limit: (data as { monthly_limit_usd: number } | null)?.monthly_limit_usd ?? null,
     });
@@ -32,7 +33,8 @@ export async function PUT(request: Request) {
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     const supabase = await createClient();
     if (parsed.data.monthlyLimitUsd === null) {
-      await supabase.from("spending_limits").delete().eq("user_id", user.id);
+      const { error } = await supabase.from("spending_limits").delete().eq("user_id", user.id);
+      if (error) throw new Error(`Spending limit removal failed: ${error.message}`);
       return NextResponse.json({ limit: null });
     }
     const { error } = await supabase.from("spending_limits").upsert(

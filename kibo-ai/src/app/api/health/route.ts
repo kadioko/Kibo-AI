@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser, toHttpError } from "@/lib/auth";
 import { limiterBackend } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/server";
+import { databaseTables, summarizeDatabaseChecks } from "@/lib/diagnostics";
 
 interface Check {
   name: string;
@@ -20,36 +21,19 @@ export async function GET() {
     const checks: Check[] = [];
     const db = await createServiceClient();
 
+    const results = await Promise.all(databaseTables.map(async (table) => {
+      const { error } = await db.from(table.name).select(table.column, { head: true }).limit(1);
+      return { name: table.name, error };
+    }));
+    const connected = results.some((result) => !result.error);
     checks.push({
       name: "Supabase connection",
-      ok: true,
-      detail: "Authenticated service query path.",
+      ok: connected,
+      detail: connected ? "Server database query succeeded." : "Server database queries failed; verify the connection and credential.",
     });
-
-    const tables = [
-      { name: "providers", column: "id" },
-      { name: "generations", column: "id" },
-      { name: "brand_profiles", column: "id" },
-      { name: "prompt_templates", column: "id" },
-      { name: "teams", column: "id" },
-      { name: "credit_ledger", column: "id" },
-      { name: "team_credit_ledger", column: "id" },
-      { name: "app_admins", column: "user_id" },
-      { name: "admin_audit_log", column: "id" },
-      { name: "model_favorites", column: "model_id" },
-    ];
-    const missing: string[] = [];
-    for (const table of tables) {
-      const { error } = await db.from(table.name).select(table.column, { count: "exact", head: true });
-      if (error) missing.push(table.name);
-    }
     checks.push({
       name: "Database migrations",
-      ok: missing.length === 0,
-      detail:
-        missing.length === 0
-          ? "0001–0010 applied."
-          : `Missing tables: ${missing.join(", ")} — run the migrations in order.`,
+      ...summarizeDatabaseChecks(results),
     });
 
     try {

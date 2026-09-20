@@ -14,7 +14,8 @@ function httpError(status: number, message: string): Error {
 }
 
 async function totals(db: Db, userId: string): Promise<{ granted: number; spent: number }> {
-  const { data } = await db.from("credit_ledger").select("amount").eq("user_id", userId);
+  const { data, error } = await db.from("credit_ledger").select("amount").eq("user_id", userId);
+  if (error) throw new Error(`Credit balance query failed: ${error.message}`);
   let granted = 0;
   let spent = 0;
   for (const row of ((data ?? []) as Array<{ amount: number }>)) {
@@ -26,7 +27,8 @@ async function totals(db: Db, userId: string): Promise<{ granted: number; spent:
 }
 
 async function teamTotals(db: Db, teamId: string): Promise<{ granted: number; spent: number }> {
-  const { data } = await db.from("team_credit_ledger").select("amount").eq("team_id", teamId);
+  const { data, error } = await db.from("team_credit_ledger").select("amount").eq("team_id", teamId);
+  if (error) throw new Error(`Team balance query failed: ${error.message}`);
   let granted = 0;
   let spent = 0;
   for (const row of ((data ?? []) as Array<{ amount: number }>)) {
@@ -124,7 +126,10 @@ export function createLedgerBilling(): Billing {
         reason,
         generation_id: null,
       });
-      if (error) throw new Error(`Grant failed: ${error.message}`);
+      if (error) {
+        if (reason.startsWith("stripe:") && error.code === "23505") return;
+        throw new Error(`Grant failed: ${error.message}`);
+      }
     },
 
     async recent(userId: string, limit = 20): Promise<LedgerEntry[]> {

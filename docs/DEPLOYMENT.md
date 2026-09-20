@@ -65,6 +65,9 @@ directory, add the environment variables, and deploy from the Vercel UI.
   domain.
 - Open **Settings → Diagnostics** and confirm the database, storage, provider,
   and rate-limiter checks match the intended deployment.
+- For an authenticated production smoke test, set `SMOKE_BASE_URL`,
+  `SMOKE_EMAIL`, and `SMOKE_PASSWORD`, then run `npm run smoke` from
+  `kibo-ai/`. The script keeps the session in memory and does not mutate data.
 - If Stripe is enabled, complete a test-mode top-up and verify the webhook adds
   a single ledger credit.
 

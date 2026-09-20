@@ -31,7 +31,14 @@ export async function POST(_request: Request, { params }: Params) {
       { onConflict: "team_id,user_id", ignoreDuplicates: true },
     );
     if (memberError) throw new Error(memberError.message);
-    await db.from("team_invites").update({ accepted_at: now }).eq("id", (invite as { id: string }).id);
+    const { error: inviteError } = await db
+      .from("team_invites")
+      .update({ accepted_at: now })
+      .eq("id", (invite as { id: string }).id);
+    if (inviteError) {
+      await db.from("team_members").delete().eq("team_id", teamId).eq("user_id", user.id);
+      throw new Error(`Invite acceptance failed: ${inviteError.message}`);
+    }
     return NextResponse.json({ ok: true });
   } catch (error) {
     const { status, message } = toHttpError(error);

@@ -17,15 +17,17 @@ export async function POST(_request: Request, { params }: Params) {
     const accessible = await loadGenerationForUser(db, user.id, id);
     if (!accessible) return NextResponse.json({ error: "Generation not found" }, { status: 404 });
 
-    const { data: existing } = await db
+    const { data: existing, error: lookupError } = await db
       .from("favorites")
       .select("generation_id")
       .eq("user_id", user.id)
       .eq("generation_id", id)
       .maybeSingle();
+    if (lookupError) throw new Error(`Favorite lookup failed: ${lookupError.message}`);
 
     if (existing) {
-      await db.from("favorites").delete().eq("user_id", user.id).eq("generation_id", id);
+      const { error } = await db.from("favorites").delete().eq("user_id", user.id).eq("generation_id", id);
+      if (error) throw new Error(`Favorite removal failed: ${error.message}`);
       return NextResponse.json({ is_favorite: false });
     }
     const { error } = await db
