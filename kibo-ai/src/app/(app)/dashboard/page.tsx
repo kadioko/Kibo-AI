@@ -40,7 +40,7 @@ export default function DashboardPage() {
         { label: "Generations this month", value: String(stats.generationsMonth) },
         { label: "Images generated", value: String(stats.images) },
         { label: "Videos generated", value: String(stats.videos) },
-        { label: "API spend (month)", value: formatUsd(stats.spend) },
+        { label: "Provider usage (month)", value: formatUsd(stats.spend) },
         { label: "Active generations", value: String(stats.active) },
       ]
     : [];

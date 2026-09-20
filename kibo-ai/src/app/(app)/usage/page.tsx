@@ -94,13 +94,19 @@ export default function UsagePage() {
           <p className="text-2xl font-bold tabular-nums">
             {usage ? formatUsd(usage.totalSpend) : "…"}
           </p>
-          <p className="mt-1 text-xs text-mute">Total spend · last {days} days</p>
+          <p className="mt-1 text-xs text-mute">Recorded provider usage · last {days} days</p>
         </div>
         <div className="rounded-2xl border border-edge bg-panel p-4">
           <p className="text-2xl font-bold tabular-nums">{usage ? usage.generations : "…"}</p>
           <p className="mt-1 text-xs text-mute">Billed generations</p>
         </div>
       </div>
+
+      <p className="rounded-xl border border-edge bg-panel-2 px-3 py-2 text-xs text-mute">
+        Usage is the cost of successful Kibo generations before Higgsfield account discounts or
+        monthly commitments. It matches Higgsfield&apos;s <strong>usage before discounts</strong>, not
+        <strong> current invoice due</strong>.
+      </p>
 
       <section className="rounded-2xl border border-edge bg-panel p-4">
         <div className="mb-2 flex items-baseline justify-between">

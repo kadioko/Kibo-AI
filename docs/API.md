@@ -57,4 +57,5 @@ Failed and cancelled requests are not charged. Higgsfield completion payloads
 do not expose an invoice amount, so `actual_cost` is Kibo's final recorded
 provider cost; account discounts or later provider invoice adjustments can
 differ. The Projects page reports both the non-failed quoted total and the
-completed final recorded total.
+completed final recorded total. Usage totals correspond to provider usage
+before discounts, not the net invoice due after commitments or credits.

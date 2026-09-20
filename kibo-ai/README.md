@@ -48,6 +48,8 @@ credentials. Do not commit `.env.local` or any API credentials.
      browser and server privileges while retaining row-level access control)
    - `supabase/migrations/0012_billing_idempotency.sql` (prevents duplicate
      credit grants when Stripe retries a webhook)
+   - `supabase/migrations/0013_reconcile_seedance_25_costs.sql` (corrects
+     completed Seedance 2.5 usage recorded with the retired local rate)
 3. **Storage** → create two buckets:
    - `kibo-inputs` — **PUBLIC** (reference uploads; unguessable UUID paths
      so the provider can fetch them).
@@ -110,6 +112,10 @@ cancelled requests show **Not charged**. Higgsfield completion status does not
 include an account invoice amount, so account discounts or later provider
 adjustments can differ from Kibo's final recorded cost. Project cards show both
 the non-failed estimated total and the completed final total.
+
+Usage reporting corresponds to Higgsfield **usage before discounts** for jobs
+submitted through Kibo. It is not the provider's **current invoice due**, which
+can be reduced by plan commitments, credits, or account-level discounts.
 
 ## Project layout
 
