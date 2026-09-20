@@ -78,9 +78,12 @@ The optional Higgsfield webhook can accelerate finalization, but polling remains
 the reliable completion path. Long-running jobs therefore become terminal when
 the client returns to the relevant screen or continues polling.
 
-Cost estimates are configured in the local model registry. Review
-`src/lib/models/registry.ts` whenever provider pricing or model endpoints
-change.
+Cost estimates are configured in the local model registry and carry a catalog
+snapshot date. Review `src/lib/models/registry.ts` whenever provider pricing or
+model endpoints change. Kibo locks the quote at submission and records it as
+final after successful completion because Higgsfield's completion response
+does not include the account invoice amount; discounts and later provider
+adjustments may differ.
 
 For a no-cost deployment smoke test, set `MOCK_PROVIDER_ENABLED=true`, create
 an account, select **Mock Image** on Create, and wait for the generated test

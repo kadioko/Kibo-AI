@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, type ApiProject, type ApiTeam } from "@/lib/api";
+import { api, formatUsd, type ApiProject, type ApiTeam } from "@/lib/api";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ApiProject[]>([]);
@@ -46,7 +46,9 @@ export default function ProjectsPage() {
         name: editName.trim(),
         teamId: editTeam || null,
       });
-      setProjects((prev) => prev.map((p) => (p.id === id ? project : p)));
+      setProjects((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...project } : p)),
+      );
       setEditingId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -67,7 +69,9 @@ export default function ProjectsPage() {
     <div className="mx-auto w-full max-w-3xl space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-        <p className="mt-1 text-sm text-mute">Organize generations into campaigns and clients.</p>
+        <p className="mt-1 text-sm text-mute">
+          Organize work and compare quoted generation cost with completed spend.
+        </p>
       </div>
 
       {error && (
@@ -171,6 +175,23 @@ export default function ProjectsPage() {
             <p className="mt-1 text-xs text-faint">
               {p.team_id ? `Team: ${teams.find((t) => t.id === p.team_id)?.name ?? "shared"}` : "Personal"} ·{" "}
               Created {new Date(p.created_at).toLocaleDateString()}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-edge bg-panel-2 p-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint">Estimated total</p>
+                <p className="mt-0.5 font-semibold tabular-nums">{formatUsd(p.estimated_cost)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-faint">Final completed</p>
+                <p className="mt-0.5 font-semibold tabular-nums text-emerald-300">
+                  {formatUsd(p.actual_cost)}
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-faint">
+              {p.generation_count} generation{p.generation_count === 1 ? "" : "s"}
+              {p.active_count > 0 ? ` · ${p.active_count} active` : ""}
+              {p.failed_count > 0 ? ` · ${p.failed_count} not charged` : ""}
             </p>
             <div className="mt-2 flex gap-1">
               <button

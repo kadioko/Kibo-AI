@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { api, formatUsd, timeAgo, type ApiGeneration } from "@/lib/api";
+import {
+  api,
+  formatUsd,
+  generationCostSummary,
+  timeAgo,
+  type ApiGeneration,
+} from "@/lib/api";
 import { useState } from "react";
 import { ViewerModal } from "./viewer-modal";
 
@@ -32,6 +38,7 @@ export function GenerationCard({
   const [viewerOpen, setViewerOpen] = useState(false);
   const g = generation;
   const inFlight = g.status === "queued" || g.status === "processing";
+  const cost = generationCostSummary(g);
 
   async function toggleFavorite() {
     setBusy(true);
@@ -121,7 +128,9 @@ export function GenerationCard({
         <p className="line-clamp-2 text-sm leading-snug">{g.prompt}</p>
         <div className="mt-2 flex items-center justify-between text-xs text-faint">
           <span className="truncate">{g.model}</span>
-          <span className="shrink-0">{formatUsd(g.actual_cost ?? g.estimated_cost)}</span>
+          <span className="shrink-0">
+            {cost.amount == null ? cost.label : `${cost.label} ${formatUsd(cost.amount)}`}
+          </span>
         </div>
         <div className="mt-1 flex items-center justify-between text-xs text-faint">
           <span>{timeAgo(g.created_at)}</span>

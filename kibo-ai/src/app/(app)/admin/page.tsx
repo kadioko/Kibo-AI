@@ -34,9 +34,9 @@ export default async function AdminPage() {
           <h2 className="font-semibold">Recent generation queue</h2>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs uppercase tracking-wide text-faint"><th className="pb-2 pr-3">Model</th><th className="pb-2 pr-3">Type</th><th className="pb-2 pr-3">Status</th><th className="pb-2 text-right">Estimated</th></tr></thead>
+              <thead><tr className="text-left text-xs uppercase tracking-wide text-faint"><th className="pb-2 pr-3">Model</th><th className="pb-2 pr-3">Type</th><th className="pb-2 pr-3">Status</th><th className="pb-2 text-right">Cost</th></tr></thead>
               <tbody>
-                {overview.recentGenerations.map((item) => <tr key={item.id} className="border-t border-edge"><td className="py-2.5 pr-3">{item.model}</td><td className="py-2.5 pr-3 text-mute">{item.type}</td><td className="py-2.5 pr-3">{item.status}</td><td className="py-2.5 text-right tabular-nums">{item.estimatedCost == null ? "—" : currency(Number(item.estimatedCost))}</td></tr>)}
+                {overview.recentGenerations.map((item) => <tr key={item.id} className="border-t border-edge"><td className="py-2.5 pr-3">{item.model}</td><td className="py-2.5 pr-3 text-mute">{item.type}</td><td className="py-2.5 pr-3">{item.status}</td><td className="py-2.5 text-right tabular-nums">{item.status === "failed" || item.status === "cancelled" ? "Not charged" : `${item.status === "completed" ? "Final " : "Est. "}${item.actualCost == null && item.estimatedCost == null ? "—" : currency(Number(item.actualCost ?? item.estimatedCost))}`}</td></tr>)}
                 {overview.recentGenerations.length === 0 && <tr><td colSpan={4} className="py-8 text-center text-sm text-mute">No generations yet.</td></tr>}
               </tbody>
             </table>

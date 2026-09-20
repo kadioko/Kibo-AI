@@ -58,6 +58,11 @@ export interface ApiProject {
   description: string | null;
   team_id: string | null;
   created_at: string;
+  generation_count: number;
+  active_count: number;
+  failed_count: number;
+  estimated_cost: number;
+  actual_cost: number;
 }
 
 export interface ApiTeamMember {
@@ -158,7 +163,15 @@ export const api = {
       body: JSON.stringify({ modelId }),
     }),
   estimate: (body: unknown) =>
-    request<{ estimate: { amountUsd: number; currency: string; breakdown?: string } }>(
+    request<{
+      estimate: {
+        amountUsd: number;
+        currency: string;
+        breakdown?: string;
+        pricingAsOf?: string;
+        pricingNote?: string;
+      };
+    }>(
       "/api/generations/estimate",
       { method: "POST", body: JSON.stringify(body) },
     ),
@@ -321,6 +334,22 @@ export function formatUsd(n: number | null | undefined): string {
   const v = Number(n);
   if (v !== 0 && Math.abs(v) < 0.01) return `$${v.toFixed(4)}`;
   return `$${v.toFixed(2)}`;
+}
+
+export function generationCostSummary(generation: ApiGeneration): {
+  label: string;
+  amount: number | null;
+} {
+  if (generation.status === "failed" || generation.status === "cancelled") {
+    return { label: "Not charged", amount: null };
+  }
+  if (generation.status === "completed") {
+    return {
+      label: "Final",
+      amount: generation.actual_cost ?? generation.estimated_cost,
+    };
+  }
+  return { label: "Est.", amount: generation.estimated_cost };
 }
 
 export function timeAgo(iso: string): string {

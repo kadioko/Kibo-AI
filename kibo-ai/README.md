@@ -99,6 +99,18 @@ Create screen → POST /api/generations → validate (zod) → rate limit →
   idempotent personal/team wallet debit
 ```
 
+### Cost tracking
+
+Create estimates use the selected model, resolution, duration, input mode, and
+output count against the public Higgsfield catalog snapshot in
+`src/lib/models/registry.ts`. The quote is locked in `estimated_cost` when the
+request is submitted. Successful completion records that locked amount in
+`actual_cost`, usage reporting, and the applicable credit ledger; failed or
+cancelled requests show **Not charged**. Higgsfield completion status does not
+include an account invoice amount, so account discounts or later provider
+adjustments can differ from Kibo's final recorded cost. Project cards show both
+the non-failed estimated total and the completed final total.
+
 ## Project layout
 
 ```
@@ -157,7 +169,7 @@ a controlled migration; never expose a service-role key to the browser.
   second provider (free `mock` provider behind `MOCK_PROVIDER_ENABLED`,
   proving the abstraction), Higgsfield webhook receiver, Upstash Redis rate
   limiting (in-memory fallback), `/api/health` diagnostics panel in Settings,
-  30-test vitest suite (`npm test`).
+  38-test vitest suite (`npm test`).
 
 ## Verify without spending (mock end-to-end)
 

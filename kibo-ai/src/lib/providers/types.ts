@@ -41,6 +41,10 @@ export interface CostEstimate {
   currency: "USD";
   /** Human-readable explanation, e.g. "5s × 1080p + audio". */
   breakdown?: string;
+  /** Public catalog snapshot used for this quote. */
+  pricingAsOf?: string;
+  /** Clarifies that provider account discounts or later invoice adjustments may differ. */
+  pricingNote?: string;
 }
 
 export interface QueuedGeneration {

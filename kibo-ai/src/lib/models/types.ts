@@ -45,6 +45,12 @@ export interface ModelEndpoints {
 export type VideoPricing = {
   /** USD per second of output at the base resolution. */
   perSecondUsd: number;
+  /** Exact public rate for each resolution when the provider publishes one. */
+  perSecondByResolution?: Record<string, number>;
+  /** Exact public rate for a duration when pricing changes by clip length. */
+  perSecondByDuration?: Record<string, number>;
+  /** Mode-specific rates for image/first-frame driven requests. */
+  imageInputPerSecondByResolution?: Record<string, number>;
   /** Multiplier per resolution id (defaults to 1). */
   resolutionMultiplier?: Record<string, number>;
   /** Extra USD per second when audio generation is enabled. */
@@ -54,6 +60,8 @@ export type VideoPricing = {
 export type ImagePricing = {
   /** USD per generated image. */
   perImageUsd: number;
+  /** Exact public rate for each resolution when the provider publishes one. */
+  perImageByResolution?: Record<string, number>;
 };
 
 export interface ModelDefinition {

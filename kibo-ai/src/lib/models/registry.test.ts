@@ -99,18 +99,18 @@ describe("estimateModelCost", () => {
     expect(estimate.breakdown).toContain("4 images");
   });
 
-  it("prices kling-3-pro 5s with default sound on (docs default)", () => {
+  it("prices kling-3-pro 5s at the current public Pro rate", () => {
     const estimate = estimateModelCost({
       model: "kling-3-pro",
       generationType: "video",
       prompt: "x",
       settings: { duration: "5" },
     });
-    // 5s × ($0.28 + $0.05 audio) — sound defaults to true per the docs.
-    expect(estimate.amountUsd).toBeCloseTo(1.65, 2);
+    expect(estimate.amountUsd).toBeCloseTo(0.42, 4);
+    expect(estimate.pricingAsOf).toBe("2026-09-20");
   });
 
-  it("adds the audio rate when sound is on", () => {
+  it("does not invent an audio surcharge when sound is included in the catalog rate", () => {
     const silent = estimateModelCost({
       model: "kling-3-std",
       generationType: "video",
@@ -123,7 +123,36 @@ describe("estimateModelCost", () => {
       prompt: "x",
       settings: { duration: "5", sound: true },
     });
-    expect(withSound.amountUsd).toBeGreaterThan(silent.amountUsd);
+    expect(withSound.amountUsd).toBe(silent.amountUsd);
+  });
+
+  it("uses resolution-specific image rates", () => {
+    const estimate = estimateModelCost({
+      model: "qwen-image",
+      generationType: "image",
+      prompt: "x",
+      settings: { resolution: "2k" },
+    });
+    expect(estimate.amountUsd).toBe(0.075);
+    expect(estimate.breakdown).toContain("2k");
+  });
+
+  it("uses the image-input tier when a video model publishes one", () => {
+    const text = estimateModelCost({
+      model: "wan-3",
+      generationType: "video",
+      prompt: "x",
+      settings: { duration: "5", resolution: "720p" },
+    });
+    const image = estimateModelCost({
+      model: "wan-3",
+      generationType: "video",
+      prompt: "x",
+      inputAssets: [{ role: "start", url: "https://example.com/frame.png" }],
+      settings: { duration: "5", resolution: "720p" },
+    });
+    expect(text.amountUsd).toBe(0.5);
+    expect(image.amountUsd).toBe(0.3);
   });
 
   it("lists free mock models for testing", () => {

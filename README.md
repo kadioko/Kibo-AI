@@ -12,11 +12,13 @@ OpenAI-compatible prompt assistant.
 
 - Generate images and videos from prompts and supported reference media.
 - Choose from a schema-driven catalog of image and video models.
-- Estimate a generation cost before submission and record actual spend.
+- Estimate generation cost from configuration-specific public provider rates,
+  lock the quote at submission, and report final recorded spend after success.
 - Track queued and in-progress jobs from the dashboard and library.
 - Keep generated outputs private in Supabase Storage and serve them with
   time-limited URLs.
-- Organize work into projects and mark useful generations as favorites.
+- Organize work into projects, compare estimated versus completed cost, and
+  mark useful generations as favorites.
 - Share projects with teams, manage pooled team wallets, and invite members.
 - Operate the studio with a protected global-admin console and auditable
   support-credit grants.

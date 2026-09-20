@@ -42,7 +42,37 @@ try {
     console.log(`${ok ? "PASS" : "FAIL"} ${path} (${response.status})`);
     if (path === "/api/health") console.log(JSON.stringify(body));
     else if (!ok) console.log(JSON.stringify({ error: body.error }));
+    if (path === "/api/projects" && ok) {
+      const totalsPresent = Array.isArray(body.projects) && body.projects.every((project) =>
+        ["generation_count", "active_count", "failed_count", "estimated_cost", "actual_cost"]
+          .every((key) => typeof project[key] === "number"),
+      );
+      if (!totalsPresent) failures++;
+      console.log(`${totalsPresent ? "PASS" : "FAIL"} project cost totals`);
+    }
   }
+  const estimateResponse = await fetch(new URL("/api/generations/estimate", baseUrl), {
+    method: "POST",
+    headers: {
+      Cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; "),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider: "higgsfield",
+      model: "soul-2",
+      generationType: "image",
+      prompt: "smoke test estimate",
+      settings: { resolution: "1080p", batchSize: "1" },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const estimateBody = await estimateResponse.json();
+  const estimateOk =
+    estimateResponse.ok &&
+    estimateBody.estimate?.amountUsd === 0.0057 &&
+    typeof estimateBody.estimate?.pricingAsOf === "string";
+  if (!estimateOk) failures++;
+  console.log(`${estimateOk ? "PASS" : "FAIL"} configuration pricing estimate`);
   for (const path of ["/dashboard", "/models", "/settings", "/admin"]) {
     const { response, body } = await check(path);
     const ok = response.ok && (path !== "/admin" || body.includes("Users"));

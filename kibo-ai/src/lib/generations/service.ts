@@ -370,12 +370,29 @@ export async function refreshGenerationRecord(
   }
   const stored = await copyOutputsToStorage(db, row, status.outputUrls);
   const primary = stored[0];
+  // Higgsfield's completion payload does not include an invoice amount. The
+  // closest auditable final cost is therefore the public-price quote locked at
+  // submission. Never recalculate an old job with a newer catalog rate.
+  const actualCost =
+    row.estimated_cost == null
+      ? estimateModelCost({
+          model: row.model,
+          generationType: row.generation_type,
+          prompt: row.prompt,
+          negativePrompt: row.negative_prompt ?? undefined,
+          inputAssets: row.input_assets.map((asset) => ({
+            ...asset,
+            role: asset.role as "start" | "end" | "reference" | "video" | "audio",
+          })),
+          settings: row.settings,
+        }).amountUsd
+      : Number(row.estimated_cost);
   await updateRow(db, row.id, {
     status: "completed",
     output_url: primary?.storagePath ?? null,
     thumbnail_url:
       row.generation_type === "image" ? (primary?.storagePath ?? null) : null,
-    actual_cost: row.estimated_cost,
+    actual_cost: actualCost,
     completed_at: new Date().toISOString(),
     error: null,
   });
@@ -392,15 +409,15 @@ export async function refreshGenerationRecord(
       provider: row.provider,
       model: row.model,
       project_id: row.project_id,
-      cost_usd: row.estimated_cost ?? 0,
+      cost_usd: actualCost,
     });
     if (usageError) throw new Error(`Usage log failed: ${usageError.message}`);
     // Debit the snapshotted funding wallet. Failed generations never reach
     // here, so like the provider, Kibo AI only bills completed work.
     if (row.team_id && !(await isAppAdmin(row.user_id))) {
-      await getBilling().spendTeam(row.team_id, row.id, row.estimated_cost ?? 0);
+      await getBilling().spendTeam(row.team_id, row.id, actualCost);
     } else {
-      await getBilling().spend(row.user_id, row.id, row.estimated_cost ?? 0);
+      await getBilling().spend(row.user_id, row.id, actualCost);
     }
   }
 

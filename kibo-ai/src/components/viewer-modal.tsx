@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, formatUsd, timeAgo, type ApiGeneration } from "@/lib/api";
+import {
+  api,
+  formatUsd,
+  generationCostSummary,
+  timeAgo,
+  type ApiGeneration,
+} from "@/lib/api";
 
 interface Asset {
   id: string;
@@ -23,6 +29,7 @@ export function ViewerModal({
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const g = generation;
+  const cost = generationCostSummary(g);
 
   useEffect(() => {
     api
@@ -83,7 +90,7 @@ export function ViewerModal({
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{g.model}</p>
             <p className="text-xs text-faint">
-              {timeAgo(g.created_at)} · {formatUsd(g.actual_cost ?? g.estimated_cost)} · {g.status}
+              {timeAgo(g.created_at)} · {cost.amount == null ? cost.label : `${cost.label} ${formatUsd(cost.amount)}`} · {g.status}
             </p>
           </div>
           <button

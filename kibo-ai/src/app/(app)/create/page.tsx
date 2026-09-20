@@ -47,7 +47,12 @@ function CreateStudio() {
   const [brandId, setBrandId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [templateName, setTemplateName] = useState("");
-  const [estimate, setEstimate] = useState<{ amountUsd: number; breakdown?: string } | null>(null);
+  const [estimate, setEstimate] = useState<{
+    amountUsd: number;
+    breakdown?: string;
+    pricingAsOf?: string;
+    pricingNote?: string;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -690,12 +695,18 @@ function CreateStudio() {
       {/* Cost + Generate */}
       <div className="rounded-2xl border border-edge bg-panel p-4">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm text-mute">Estimated cost</span>
+          <span className="text-sm text-mute">Estimated provider cost</span>
           <span className="text-xl font-bold tabular-nums">
             {estimate ? formatUsd(estimate.amountUsd) : "—"}
           </span>
         </div>
         {estimate?.breakdown && <p className="mb-3 text-xs text-faint">{estimate.breakdown}</p>}
+        {estimate?.pricingNote && (
+          <p className="mb-3 text-xs text-faint">
+            Catalog snapshot{estimate.pricingAsOf ? ` ${estimate.pricingAsOf}` : ""}. {estimate.pricingNote}
+            {" "}Completed runs show the final recorded cost.
+          </p>
+        )}
         {error && (
           <p role="alert" className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {error}

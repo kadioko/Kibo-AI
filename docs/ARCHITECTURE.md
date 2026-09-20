@@ -43,15 +43,18 @@ server-side provider code.
    upload URL. Its unguessable public URL is supplied to the provider when the
    chosen model supports that media role.
 3. `POST /api/generations` validates the request with Zod, applies rate
-   limiting, derives safe/default settings from the model registry, estimates
-   cost, and verifies the personal or team credit balance before submitting the
-   job through the server-side provider.
+   limiting, derives safe/default settings from the model registry, calculates
+   a configuration-specific public-rate estimate, and verifies the personal or
+   team credit balance before submitting the job through the server-side
+   provider. The estimate is locked on the generation row at submission.
 4. The provider request ID and initial state are persisted in `generations`.
 5. The client polls `GET /api/generations/[id]`. For non-terminal jobs, the
    server queries Higgsfield and updates the stored state.
 6. On completion, output files are copied from the provider CDN into the
    private `kibo-outputs` bucket. An idempotent `generation_assets` record,
-   `usage_logs` record, and personal or team wallet debit are created.
+   `usage_logs` record, final `actual_cost`, and personal or team wallet debit
+   are created from the locked quote. The provider completion API does not
+   return an invoice amount, so provider account discounts may differ.
 7. The API serializes private storage paths into seven-day signed URLs for the
    authenticated owner.
 

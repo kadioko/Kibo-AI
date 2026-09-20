@@ -21,6 +21,7 @@ export interface AdminOverview {
     type: string;
     status: string;
     estimatedCost: number | null;
+    actualCost: number | null;
     createdAt: string;
   }>;
 }
@@ -73,7 +74,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     db.from("usage_logs").select("cost_usd").gte("created_at", since),
     db
       .from("generations")
-      .select("id,user_id,model,generation_type,status,estimated_cost,created_at")
+      .select("id,user_id,model,generation_type,status,estimated_cost,actual_cost,created_at")
       .order("created_at", { ascending: false })
       .limit(12),
   ]);
@@ -109,6 +110,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
         generation_type: string;
         status: string;
         estimated_cost: number | null;
+        actual_cost: number | null;
         created_at: string;
       };
       return {
@@ -118,6 +120,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
         type: item.generation_type,
         status: item.status,
         estimatedCost: item.estimated_cost,
+        actualCost: item.actual_cost,
         createdAt: item.created_at,
       };
     }),

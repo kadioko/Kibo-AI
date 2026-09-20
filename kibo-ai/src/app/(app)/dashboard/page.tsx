@@ -147,6 +147,10 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs text-faint">
                   {p.team_id ? "Team project" : "Personal"}
                 </p>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-mute">Est. {formatUsd(p.estimated_cost)}</span>
+                  <span className="text-emerald-300">Final {formatUsd(p.actual_cost)}</span>
+                </div>
               </Link>
             ))}
           </div>

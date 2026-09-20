@@ -1,20 +1,29 @@
 /**
  * Kibo AI model registry — the single source of truth for models.
  *
- * Pricing reconciled 2026-09-18 against the public Higgsfield API catalog
- * (higgsfield.ai/higgsfield-api) and docs.higgsfield.ai model pages.
- * The API bills list rates in USD; account discounts (15–50%) lower the real
- * charge, so estimates use the STANDARD rate and are conservative by design.
+ * Pricing reconciled 2026-09-20 against the public Higgsfield API catalog and
+ * model pages. Estimates use the displayed public rate for the selected
+ * configuration and are snapshotted when a request is submitted. Account-level
+ * discounts or later provider adjustments can make the provider invoice differ.
  *
  * Verified = endpoint + params + price seen in official docs.
  * "verify"  = carried over, reconcile in console.higgsfield.ai before relying
  *             on it for billing-sensitive flows.
  */
 import type { CostEstimate, CreateGenerationInput } from "../providers/types";
-import type { ModelDefinition, ModelEndpoints } from "./types";
+import type {
+  ImagePricing,
+  ModelDefinition,
+  ModelEndpoints,
+  VideoPricing,
+} from "./types";
 
 const RATIOS_IMAGE = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
 const RATIOS_VIDEO = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
+
+export const PRICING_AS_OF = "2026-09-20";
+export const PRICING_NOTE =
+  "Public Higgsfield catalog rate; account discounts and provider adjustments may differ.";
 
 function imageModel(
   def: Omit<ModelDefinition, "capabilities"> & {
@@ -89,12 +98,15 @@ export const MODELS: readonly ModelDefinition[] = [
     },
     endpoints: { text: "higgsfield-ai/soul/v2/standard" },
     countParam: { bodyKey: "batch_size" },
-    pricing: { perImageUsd: 0.0032 },
+    pricing: {
+      perImageUsd: 0.0032,
+      perImageByResolution: { "720p": 0.0032, "1080p": 0.0057 },
+    },
     capabilities: { outputs: [1, 4], seed: true },
   }),
   // Verified: docs.higgsfield.ai/docs/models/soul-cinema/generate.md —
-  // same schema as Soul 2. Price uses the Soul Standard list rate ($0.0938);
-  // verify in console (verify).
+  // same schema as Soul 2. Soul Cinema is a Soul 2 mode, not the legacy Soul
+  // Standard model ($0.0938/image), which was previously used here by mistake.
   imageModel({
     id: "soul-cinema",
     provider: "higgsfield",
@@ -114,7 +126,10 @@ export const MODELS: readonly ModelDefinition[] = [
     },
     endpoints: { text: "higgsfield-ai/soul/cinema" },
     countParam: { bodyKey: "batch_size" },
-    pricing: { perImageUsd: 0.0938 },
+    pricing: {
+      perImageUsd: 0.0032,
+      perImageByResolution: { "720p": 0.0032, "1080p": 0.0057 },
+    },
     capabilities: { outputs: [1, 4], seed: true },
   }),
   // Endpoints + price unverified (verify).
@@ -135,7 +150,7 @@ export const MODELS: readonly ModelDefinition[] = [
     pricing: { perImageUsd: 0.04 },
     capabilities: { maxReferences: 1, outputs: [1, 2, 3, 4] },
   }),
-  // Endpoints + price unverified (verify).
+  // Ideogram 4 public catalog rate. The Kibo id stays stable for saved runs.
   imageModel({
     id: "ideogram",
     provider: "higgsfield",
@@ -144,19 +159,24 @@ export const MODELS: readonly ModelDefinition[] = [
     mediaRoles: { reference: 1 },
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "1:1" },
-      resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
+      renderingSpeed: {
+        type: "enum",
+        values: ["DEFAULT", "TURBO", "QUALITY"],
+        default: "DEFAULT",
+      },
     },
     endpoints: {
-      text: "ideogram/text-to-image",
-      reference: "ideogram/reference-to-image",
+      text: "ideogram/v4.0",
+      reference: "ideogram/v4.0",
     },
-    pricing: { perImageUsd: 0.06 },
+    pricing: { perImageUsd: 0.03 },
     capabilities: { maxReferences: 1 },
   }),
   // Verified: docs.higgsfield.ai/docs/models/recraft-v4-1-pro/generate.md —
   // endpoint recraft/v4.1/pro/text-to-image, fixed 2k resolution, aspect
   // allow-list, output_format, colors/background (not yet exposed in UI).
-  // Price unverified (verify). No negative_prompt param.
+  // Recraft V4.1 Pro is fixed at 2k and costs $0.21/image. The $0.035
+  // catalog entry is the non-Pro 1k endpoint. No negative_prompt param.
   imageModel({
     id: "recraft",
     provider: "higgsfield",
@@ -176,9 +196,9 @@ export const MODELS: readonly ModelDefinition[] = [
       outputFormat: { type: "enum", values: ["png", "jpg", "webp"], default: "jpg" },
     },
     endpoints: { text: "recraft/v4.1/pro/text-to-image" },
-    pricing: { perImageUsd: 0.06 },
+    pricing: { perImageUsd: 0.21, perImageByResolution: { "2k": 0.21 } },
   }),
-  // Endpoints + price unverified (verify).
+  // Qwen Image 3 public catalog rates: 1k $0.04, 2k $0.075.
   imageModel({
     id: "qwen-image",
     provider: "higgsfield",
@@ -187,18 +207,21 @@ export const MODELS: readonly ModelDefinition[] = [
     mediaRoles: { reference: 4 },
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_IMAGE, default: "1:1" },
-      resolution: { type: "enum", values: ["720p", "1080p", "2K"], default: "1080p" },
+      resolution: { type: "enum", values: ["1k", "2k"], default: "1k" },
     },
     endpoints: {
-      text: "qwen/image/text-to-image",
-      reference: "qwen/image/reference-to-image",
+      text: "alibaba/qwen-image-3/text-to-image",
+      reference: "alibaba/qwen-image-3/edit",
     },
-    pricing: { perImageUsd: 0.05 },
+    pricing: {
+      perImageUsd: 0.04,
+      perImageByResolution: { "1k": 0.04, "2k": 0.075 },
+    },
     capabilities: { maxReferences: 4 },
   }),
-  // Price uses the public Seedance 2.5 standard list rate ($0.1234/s);
-  // token-metered 1080p lands in the same band via the multiplier.
-  // Audio delta unverified (verify).
+  // Public catalog range is token-metered: $0.144–$0.3236/s at 480p–720p.
+  // Use the published resolution bounds so the estimate never invents a
+  // separate audio surcharge (audio is part of the documented request).
   videoModel({
     id: "seedance-2.5",
     provider: "higgsfield",
@@ -207,7 +230,7 @@ export const MODELS: readonly ModelDefinition[] = [
     mediaRoles: { start: 1, end: 1, reference: 4, video: 2, audio: 1 },
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
-      resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
+      resolution: { type: "enum", values: ["480p", "720p"], default: "720p" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
       generateAudio: { type: "boolean", default: true },
     },
@@ -217,9 +240,8 @@ export const MODELS: readonly ModelDefinition[] = [
       reference: "bytedance/seedance-2.5/reference-to-video",
     },
     pricing: {
-      perSecondUsd: 0.1234,
-      resolutionMultiplier: { "720p": 1, "1080p": 1.8 },
-      audioPerSecondUsd: 0.03,
+      perSecondUsd: 0.144,
+      perSecondByResolution: { "480p": 0.144, "720p": 0.3236 },
     },
     capabilities: {
       imageToVideo: true,
@@ -230,7 +252,8 @@ export const MODELS: readonly ModelDefinition[] = [
       seed: true,
     },
   }),
-  // Endpoints + price unverified (verify); Fast tier should sit under 2.0 std.
+  // Seedance 2.0 is token-metered. 720p/1080p values scale the published
+  // 480p rate by output pixel area; the 4K tier uses a different token rate.
   videoModel({
     id: "seedance-2.0-fast",
     provider: "higgsfield",
@@ -249,9 +272,8 @@ export const MODELS: readonly ModelDefinition[] = [
       reference: "bytedance/seedance-2.0/fast/reference-to-video",
     },
     pricing: {
-      perSecondUsd: 0.0985,
-      resolutionMultiplier: { "720p": 1, "1080p": 1.8 },
-      audioPerSecondUsd: 0.02,
+      perSecondUsd: 0.2216,
+      perSecondByResolution: { "720p": 0.2216, "1080p": 0.4987 },
     },
     capabilities: {
       imageToVideo: true,
@@ -261,9 +283,8 @@ export const MODELS: readonly ModelDefinition[] = [
       audioSupport: true,
     },
   }),
-  // Standard list rate $0.084/s (50%-off promo rate is $0.042).
+  // Current public Turbo rates: $0.056/s at 720p and $0.07/s at 1080p.
   // Aspect allow-list is 16:9/9:16/1:1 — sending anything else 400s.
-  // Turbo params page unverified (verify).
   videoModel({
     id: "kling-3-turbo",
     provider: "higgsfield",
@@ -279,17 +300,20 @@ export const MODELS: readonly ModelDefinition[] = [
       text: "kling-video/v3.0-turbo/text-to-video",
       image: "kling-video/v3.0-turbo/image-to-video",
     },
-    pricing: { perSecondUsd: 0.084 },
+    pricing: {
+      perSecondUsd: 0.056,
+      perSecondByResolution: { "720p": 0.056, "1080p": 0.07 },
+    },
     capabilities: { imageToVideo: true, durations: [5, 10] },
   }),
-  // Standard list rate $0.084/s. `sound` is sent as "on"/"off" (docs).
-  // Std params page unverified beyond the shared Kling contract (verify).
+  // Current public standard rate: $0.042/s text-to-video and up to $0.063/s
+  // image-to-video. `sound` is included and sent as "on"/"off".
   videoModel({
     id: "kling-3-std",
     provider: "higgsfield",
     label: "Kling 3 Standard",
     blurb: "Balanced quality with sound and multi-shot",
-    mediaRoles: { start: 1, end: 1 },
+    mediaRoles: { start: 1 },
     settings: {
       aspectRatio: { type: "enum", values: ["16:9", "9:16", "1:1"], default: "16:9" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
@@ -302,14 +326,15 @@ export const MODELS: readonly ModelDefinition[] = [
       image: "kling-video/v3.0/std/image-to-video",
     },
     pricing: {
-      perSecondUsd: 0.084,
-      audioPerSecondUsd: 0.02,
+      perSecondUsd: 0.042,
+      imageInputPerSecondByResolution: { default: 0.063 },
     },
     capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
   }),
   // Verified: docs.higgsfield.ai/docs/models/kling-3/pro-text-to-video.md —
   // endpoint, duration 3–15s, sound on/off, cfg_scale 0–1, multi_shots,
-  // aspect 16:9/9:16/1:1. Pro price unverified (verify).
+  // aspect 16:9/9:16/1:1. Current displayed Pro rate is $0.084/s for
+  // supported 3–15 second clips; sound is included in that rate.
   videoModel({
     id: "kling-3-pro",
     provider: "higgsfield",
@@ -327,13 +352,11 @@ export const MODELS: readonly ModelDefinition[] = [
       text: "kling-video/v3.0/pro/text-to-video",
       image: "kling-video/v3.0/pro/image-to-video",
     },
-    pricing: {
-      perSecondUsd: 0.28,
-      audioPerSecondUsd: 0.05,
-    },
+    pricing: { perSecondUsd: 0.084 },
     capabilities: { imageToVideo: true, durations: [3, 5, 10, 15], audioSupport: true },
   }),
-  // Wan 3.0 standard list rate $0.05/s. Endpoints unverified (verify).
+  // Wan 3.0 text rates: 720p $0.10/s, 1080p $0.20/s. Image-driven
+  // requests use the lower $0.06/$0.12 public tier.
   videoModel({
     id: "wan-3",
     provider: "higgsfield",
@@ -344,16 +367,21 @@ export const MODELS: readonly ModelDefinition[] = [
       aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
       resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
+      generateAudio: { type: "boolean", default: true },
+      enableThinking: { type: "boolean", default: false },
     },
     endpoints: {
-      text: "wan/v3/text-to-video",
-      image: "wan/v3/image-to-video",
-      firstLast: "wan/v3/first-last-frame-to-video",
+      text: "alibaba/wan-3.0/text-to-video",
+      image: "alibaba/wan-3.0/image-to-video",
     },
-    pricing: { perSecondUsd: 0.05 },
-    capabilities: { imageToVideo: true, durations: [5, 10] },
+    pricing: {
+      perSecondUsd: 0.1,
+      perSecondByResolution: { "720p": 0.1, "1080p": 0.2 },
+      imageInputPerSecondByResolution: { "720p": 0.06, "1080p": 0.12 },
+    },
+    capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
   }),
-  // Endpoints + params + price unverified (verify).
+  // Current public LTX 2.5 Pro rates: 720p $0.12/s, 1080p $0.17/s.
   videoModel({
     id: "ltx-2.5-pro",
     provider: "higgsfield",
@@ -363,20 +391,20 @@ export const MODELS: readonly ModelDefinition[] = [
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
       resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
-      duration: { type: "range", min: 2, max: 10, default: 5 },
+      duration: { type: "range", min: 6, max: 10, default: 6 },
       generateAudio: { type: "boolean", default: false },
     },
     endpoints: {
-      text: "ltx/2.5-pro/text-to-video",
-      image: "ltx/2.5-pro/image-to-video",
+      text: "lightricks/ltx-2.5/text-to-video/pro",
+      image: "lightricks/ltx-2.5/image-to-video/pro",
     },
     pricing: {
-      perSecondUsd: 0.08,
-      audioPerSecondUsd: 0.02,
+      perSecondUsd: 0.12,
+      perSecondByResolution: { "720p": 0.12, "1080p": 0.17 },
     },
-    capabilities: { imageToVideo: true, durations: [2, 3, 4, 5, 6, 7, 8, 9, 10], audioSupport: true },
+    capabilities: { imageToVideo: true, durations: [6, 7, 8, 9, 10], audioSupport: true },
   }),
-  // Endpoints + params + price unverified (verify).
+  // MiniMax Hailuo 2.3 Standard: $0.0467/s for 6s and $0.056/s for 10s.
   videoModel({
     id: "minimax-hailuo",
     provider: "higgsfield",
@@ -388,13 +416,17 @@ export const MODELS: readonly ModelDefinition[] = [
       duration: { type: "enum", values: ["6", "10"], default: "6" },
     },
     endpoints: {
-      text: "minimax/hailuo/text-to-video",
-      image: "minimax/hailuo/image-to-video",
+      text: "minimax/hailuo-2.3/standard/text-to-video",
+      image: "minimax/hailuo-2.3/standard/image-to-video",
     },
-    pricing: { perSecondUsd: 0.07 },
+    pricing: {
+      perSecondUsd: 0.0467,
+      perSecondByDuration: { "6": 0.0467, "10": 0.056 },
+    },
     capabilities: { imageToVideo: true, durations: [6, 10] },
   }),
-  // Endpoints + params + price unverified (verify).
+  // PixVerse 6 current displayed rates: $0.051/s at 720p and $0.0978/s
+  // at 1080p. Audio is included in the configuration price.
   videoModel({
     id: "pixverse",
     provider: "higgsfield",
@@ -403,17 +435,21 @@ export const MODELS: readonly ModelDefinition[] = [
     mediaRoles: { start: 1 },
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
+      resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       duration: { type: "enum", values: ["5", "8"], default: "5" },
       generateAudio: { type: "boolean", default: false },
     },
     endpoints: {
-      text: "pixverse/text-to-video",
-      image: "pixverse/image-to-video",
+      text: "pixverse/v6/text-to-video",
+      image: "pixverse/v6/image-to-video",
     },
-    pricing: { perSecondUsd: 0.06, audioPerSecondUsd: 0.02 },
+    pricing: {
+      perSecondUsd: 0.051,
+      perSecondByResolution: { "720p": 0.051, "1080p": 0.0978 },
+    },
     capabilities: { imageToVideo: true, durations: [5, 8], audioSupport: true },
   }),
-  // Endpoints + params + price unverified (verify).
+  // Grok Imagine Video 1.5: $0.14/s at 720p, $0.25/s at 1080p.
   videoModel({
     id: "grok-imagine-video",
     provider: "higgsfield",
@@ -422,14 +458,18 @@ export const MODELS: readonly ModelDefinition[] = [
     mediaRoles: { start: 1 },
     settings: {
       aspectRatio: { type: "enum", values: RATIOS_VIDEO, default: "16:9" },
+      resolution: { type: "enum", values: ["720p", "1080p"], default: "720p" },
       duration: { type: "enum", values: ["5", "10"], default: "5" },
       generateAudio: { type: "boolean", default: false },
     },
     endpoints: {
-      text: "grok/imagine-video/text-to-video",
-      image: "grok/imagine-video/image-to-video",
+      text: "xai/grok-imagine-video/v1.5/text-to-video",
+      image: "xai/grok-imagine-video/v1.5/image-to-video",
     },
-    pricing: { perSecondUsd: 0.05, audioPerSecondUsd: 0.01 },
+    pricing: {
+      perSecondUsd: 0.14,
+      perSecondByResolution: { "720p": 0.14, "1080p": 0.25 },
+    },
     capabilities: { imageToVideo: true, durations: [5, 10], audioSupport: true },
   }),
   // Mock provider models — free, deterministic, only listed when
@@ -613,31 +653,47 @@ export function estimateModelCost(input: CreateGenerationInput): CostEstimate {
   const settings = parseSettings(model, input.settings);
 
   if (model.capabilities.generationType === "image") {
-    const perImage = (model.pricing as { perImageUsd: number }).perImageUsd;
+    const pricing = model.pricing as ImagePricing;
+    const resolution = typeof settings.resolution === "string" ? settings.resolution : undefined;
+    const perImage =
+      (resolution ? pricing.perImageByResolution?.[resolution] : undefined) ??
+      pricing.perImageUsd;
     const outputs = countOutputs(model, settings);
     const amount = round4(perImage * outputs);
     return {
       amountUsd: amount,
       currency: "USD",
-      breakdown: `${outputs} image${outputs > 1 ? "s" : ""} × $${perImage.toFixed(2)}`,
+      breakdown: `${outputs} image${outputs > 1 ? "s" : ""}${resolution ? ` · ${resolution}` : ""} × $${formatRate(perImage)}`,
+      pricingAsOf: PRICING_AS_OF,
+      pricingNote: PRICING_NOTE,
     };
   }
 
-  const pricing = model.pricing as {
-    perSecondUsd: number;
-    resolutionMultiplier?: Record<string, number>;
-    audioPerSecondUsd?: number;
-  };
+  const pricing = model.pricing as VideoPricing;
   const duration = Number(settings.duration ?? model.capabilities.durations[0] ?? 5);
-  const resolution = typeof settings.resolution === "string" ? settings.resolution : "720p";
-  const mult = pricing.resolutionMultiplier?.[resolution] ?? 1;
+  const resolution = typeof settings.resolution === "string" ? settings.resolution : "default";
+  const hasImageInput = (input.inputAssets ?? []).some((asset) =>
+    ["start", "end", "reference"].includes(asset.role),
+  );
+  const modeRate = hasImageInput
+    ? pricing.imageInputPerSecondByResolution?.[resolution] ??
+      pricing.imageInputPerSecondByResolution?.default
+    : undefined;
+  const baseRate =
+    modeRate ??
+    pricing.perSecondByDuration?.[String(duration)] ??
+    pricing.perSecondByResolution?.[resolution] ??
+    pricing.perSecondUsd * (pricing.resolutionMultiplier?.[resolution] ?? 1);
   const audioOn = audioEnabled(settings);
   const audioRate = audioOn ? (pricing.audioPerSecondUsd ?? 0) : 0;
-  const amount = round4(duration * (pricing.perSecondUsd * mult + audioRate));
+  const rate = baseRate + audioRate;
+  const amount = round4(duration * rate);
   return {
     amountUsd: amount,
     currency: "USD",
-    breakdown: `${duration}s × $${(pricing.perSecondUsd * mult + audioRate).toFixed(3)}/s${audioOn ? " (incl. audio)" : ""}`,
+    breakdown: `${duration}s${resolution !== "default" ? ` · ${resolution}` : ""}${hasImageInput ? " · image input" : ""} × $${formatRate(rate)}/s${audioOn && audioRate > 0 ? " (incl. audio surcharge)" : ""}`,
+    pricingAsOf: PRICING_AS_OF,
+    pricingNote: PRICING_NOTE,
   };
 }
 
@@ -663,4 +719,8 @@ function toSnake(key: string): string {
 
 function round4(n: number): number {
   return Math.round(n * 10_000) / 10_000;
+}
+
+function formatRate(n: number): string {
+  return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
 }
